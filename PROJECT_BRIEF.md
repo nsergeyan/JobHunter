@@ -1,0 +1,88 @@
+# Project Brief: Job-Scout (working name)
+
+## What this is
+A personal job-search agent + data science project for a 3rd-year Data
+Science/AI student (Leiden University). It has two purposes at once:
+1. A real tool I will use to find junior DS/AI jobs in the Netherlands.
+2. A portfolio project demonstrating the full DS lifecycle: data
+   collection, labeling, model training, evaluation, and applied statistics
+   — not just LLM orchestration.
+
+## Why it's structured this way
+Similar "AI job agents" already exist (e.g. career-ops) but they all use
+an LLM to judge fit every time. The differentiator here: train an actual
+ranking/classification model on self-labeled data, and benchmark it
+against LLM-as-judge and naive embedding similarity. That comparison is
+the core data science contribution.
+
+## Scope for v1 (build in this order — do not skip ahead)
+1. **Scraper + database.** Collect vacancies from Magnet.me, Indeed NL,
+   and company career pages hosted on Greenhouse/Lever. Do NOT scrape
+   LinkedIn directly (ToS risk to personal account) — this is a
+   deliberate, documented exclusion, not an oversight.
+2. **LLM extraction.** Parse raw postings into structured fields (skills,
+   seniority, salary if present, language requirement, remote policy)
+   using an LLM call with a Pydantic schema for validation.
+3. **Labeling tool.** A simple CLI that shows me a vacancy and records my
+   own fit rating (0/1/2) into the database. This produces the training
+   labels — no ML before this exists.
+4. **Ranking model.** Once ~200-300 labels exist, train a model
+   (start: LightGBM or logistic regression on engineered features +
+   embeddings) to predict fit.
+5. **Benchmark.** Compare trained model vs. LLM-as-judge vs. cosine
+   similarity on a held-out, time-based test set. Report precision@k.
+6. **Agent loop.** Daily scan -> rank -> draft tailored cover letters for
+   top matches -> digest.
+7. **Market analysis.** Once data accumulates over the semester, a
+   notebook analyzing the Dutch junior DS market (skill demand, salary
+   patterns, etc.).
+
+## Tech constraints
+- Python 3.11+, macOS (PyCharm as IDE).
+- Database: SQLite to start (simple, works with PyCharm's DB viewer).
+- Respect robots.txt and rate-limit all scrapers; this must be visible in
+  code (sleep/backoff), not just claimed in docs.
+- Config/secrets via `.env`, never committed.
+
+## Repo structure
+```
+job-scout/
+├── README.md
+├── PROJECT_BRIEF.md
+├── pyproject.toml
+├── .env.example
+├── .gitignore
+├── src/
+│   ├── scrapers/       # one module per source, shared base class
+│   ├── db/             # schema + simple data access functions
+│   ├── extraction/     # LLM -> structured JSON parsing
+│   ├── labeling/        # CLI labeling tool
+│   ├── ranking/         # feature engineering + model training (later)
+│   └── analysis/        # notebooks (later)
+├── data/                 # gitignored, local SQLite file lives here
+└── tests/
+```
+
+## Working style (important for how Claude Code should help)
+- I own the design decisions: schema design, labeling scheme, evaluation
+  metric, which sources to scrape. Claude Code should implement, explain
+  its choices when asked, and flag tradeoffs — not silently decide
+  architecture for me.
+- Prefer small, working increments over big speculative builds. First
+  milestone: 200+ real vacancies sitting in SQLite that I can inspect.
+- Every scraper needs: rate limiting, a clear User-Agent, and error
+  handling for layout changes (sites change HTML often).
+
+## Open notes / risks flagged during planning
+- Indeed NL actively fights scrapers (Cloudflare/captchas); deprioritize
+  it until Magnet.me + Greenhouse/Lever get us to the 200-vacancy
+  milestone.
+- Prefer Greenhouse (`boards-api.greenhouse.io`) and Lever
+  (`api.lever.co/v0/postings/...`) public JSON APIs over HTML scraping
+  where available — less brittle than parsing markup.
+- With only ~200-300 labeled examples, start the ranking model with
+  regularized logistic regression as the baseline; only move to LightGBM
+  if it actually beats that baseline on the held-out set.
+- Labels reflect the author's personal fit judgment, not objective job
+  quality — frame the benchmark as "a personalized ranker vs. generic
+  LLM judging," not an objective quality claim.
