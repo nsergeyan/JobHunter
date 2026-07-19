@@ -12,7 +12,7 @@ class ScraperPatternsTest {
         assertTrue(ScraperPatterns.isCandidateTitle("Software Engineer II"));
         assertTrue(ScraperPatterns.isCandidateTitle("Data Scientist"));
         assertTrue(ScraperPatterns.isCandidateTitle("Software Engineer Intern"));
-        assertTrue(ScraperPatterns.isCandidateTitle("Junior Data Analyst"));
+        assertTrue(ScraperPatterns.isCandidateTitle("Junior Data Scientist"));
         assertTrue(ScraperPatterns.isCandidateTitle("Machine Learning New Grad"));
 
         assertFalse(ScraperPatterns.isCandidateTitle("Senior Data Engineer"));
@@ -37,5 +37,16 @@ class ScraperPatternsTest {
     void isCandidateTitleExcludesFrontendRoles() {
         assertFalse(ScraperPatterns.isCandidateTitle("Frontend Developer"));
         assertFalse(ScraperPatterns.isCandidateTitle("Front-End Engineer"));
+    }
+
+    @Test
+    void isCandidateTitleExcludesDataAnalystRoles() {
+        assertFalse(ScraperPatterns.isCandidateTitle("Data Analyst"));
+        assertFalse(ScraperPatterns.isCandidateTitle("Junior Data Analyst"));
+        assertFalse(ScraperPatterns.isCandidateTitle("Data Analytics Engineer"));
+
+        // Data Scientist/Engineer roles are unaffected -- only "analyst" is excluded.
+        assertTrue(ScraperPatterns.isCandidateTitle("Data Scientist"));
+        assertTrue(ScraperPatterns.isCandidateTitle("Data Engineer"));
     }
 }
