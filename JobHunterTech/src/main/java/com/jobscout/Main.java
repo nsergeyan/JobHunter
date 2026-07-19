@@ -3,6 +3,7 @@ package com.jobscout;
 import com.jobscout.db.SchemaInitializer;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JdkHttpFetcher;
+import com.jobscout.scraper.ashby.AshbyScraper;
 import com.jobscout.scraper.greenhouse.GreenhouseScraper;
 import com.jobscout.scraper.workday.WorkdayScraper;
 import io.github.cdimascio.dotenv.Dotenv;
@@ -37,6 +38,9 @@ public final class Main {
 
             int greenhouseCount = new GreenhouseScraper(fetcher).run(conn);
             System.out.println("Upserted " + greenhouseCount + " vacancies from Greenhouse-hosted companies.");
+
+            int ashbyCount = new AshbyScraper(fetcher).run(conn);
+            System.out.println("Upserted " + ashbyCount + " vacancies from Ashby-hosted companies.");
         }
     }
 }
