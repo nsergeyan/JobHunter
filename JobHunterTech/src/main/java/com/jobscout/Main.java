@@ -5,6 +5,7 @@ import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JdkHttpFetcher;
 import com.jobscout.scraper.ashby.AshbyScraper;
 import com.jobscout.scraper.greenhouse.GreenhouseScraper;
+import com.jobscout.scraper.lever.LeverScraper;
 import com.jobscout.scraper.workday.WorkdayScraper;
 import io.github.cdimascio.dotenv.Dotenv;
 
@@ -41,6 +42,9 @@ public final class Main {
 
             int ashbyCount = new AshbyScraper(fetcher).run(conn);
             System.out.println("Upserted " + ashbyCount + " vacancies from Ashby-hosted companies.");
+
+            int leverCount = new LeverScraper(fetcher).run(conn);
+            System.out.println("Upserted " + leverCount + " vacancies from Lever-hosted companies.");
         }
     }
 }

@@ -16,6 +16,16 @@ class TargetRegionTest {
     }
 
     @Test
+    void isInScopeByCountryCodeMatchesIsoAlpha2Codes() {
+        // Lever's "country" field uses ISO 3166-1 alpha-2 codes, not full names.
+        assertTrue(TargetRegion.isInScopeByCountryCode("GB"));
+        assertTrue(TargetRegion.isInScopeByCountryCode("us"));
+        assertTrue(TargetRegion.isInScopeByCountryCode("DE"));
+        assertFalse(TargetRegion.isInScopeByCountryCode("IN"));
+        assertFalse(TargetRegion.isInScopeByCountryCode(null));
+    }
+
+    @Test
     void textMentionsTargetRegionMatchesFullCountryNamesAndUsStateAbbreviations() {
         assertTrue(TargetRegion.textMentionsTargetRegion("Austin, Texas, United States of America"));
         assertTrue(TargetRegion.textMentionsTargetRegion("Berlin, Germany"));

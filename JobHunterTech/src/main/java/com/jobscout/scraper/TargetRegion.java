@@ -22,6 +22,14 @@ public final class TargetRegion {
     private static final Set<String> US_NAMES = Set.of(
             "united states", "united states of america", "usa", "u.s.", "u.s.a.");
 
+    // ISO 3166-1 alpha-2 codes -- Lever's "country" field uses these (e.g. "GB",
+    // "US"), not full names like Workday/Ashby do.
+    private static final Set<String> IN_SCOPE_COUNTRY_CODES = Set.of(
+            "al", "ad", "at", "by", "be", "ba", "bg", "hr", "cy", "cz", "dk", "ee", "fi", "fr",
+            "de", "gr", "hu", "is", "ie", "it", "xk", "lv", "li", "lt", "lu", "mt", "md", "mc",
+            "me", "nl", "mk", "no", "pl", "pt", "ro", "sm", "rs", "sk", "si", "es", "se", "ch",
+            "ua", "gb", "va", "us");
+
     // Greenhouse (and likely other ATS platforms) format US locations as "City, ST"
     // -- e.g. "San Francisco, CA", "New York City, NY" -- without spelling out
     // "United States" at all. Matched only right after a comma to avoid false
@@ -40,6 +48,14 @@ public final class TargetRegion {
         }
         String normalized = countryName.toLowerCase(Locale.ROOT).strip();
         return EUROPEAN_COUNTRIES.contains(normalized) || US_NAMES.contains(normalized);
+    }
+
+    /** Match against a structured 2-letter ISO 3166-1 alpha-2 country code, e.g. Lever's "country" field. */
+    public static boolean isInScopeByCountryCode(String isoCode) {
+        if (isoCode == null || isoCode.isBlank()) {
+            return false;
+        }
+        return IN_SCOPE_COUNTRY_CODES.contains(isoCode.toLowerCase(Locale.ROOT).strip());
     }
 
     /**
