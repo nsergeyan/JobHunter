@@ -1,0 +1,113 @@
+package com.jobscout.scraper.workday;
+
+import com.jobscout.db.SchemaInitializer;
+import com.jobscout.scraper.FakeHttpFetcher;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class WorkdayScraperTest {
+
+    private static final WorkdayCompany TEST_CO =
+            new WorkdayCompany("TestCo", "testco.wd1.myworkdayjobs.com", "testco", "testco");
+
+    private static final String LIST_URL = "https://testco.wd1.myworkdayjobs.com/wday/cxs/testco/testco/jobs";
+
+    // total=3, pageSize=2 -> two pages, exercising pagination.
+    private static final String PAGE_1_JSON = """
+            {"total":3,"jobPostings":[
+              {"title":"Software Engineer II","externalPath":"/job/A/Software-Engineer-II_R1"},
+              {"title":"Sales Manager","externalPath":"/job/B/Sales-Manager_R2"}
+            ]}
+            """;
+    private static final String PAGE_2_JSON = """
+            {"total":3,"jobPostings":[
+              {"title":"Data Scientist","externalPath":"/job/C/Data-Scientist_R3"}
+            ]}
+            """;
+
+    private static final String DETAIL_JSON = """
+            {
+              "jobPostingInfo": {
+                "title": "Software Engineer II",
+                "jobDescription": "<p>Build <strong>things</strong> with us.</p>",
+                "location": "Krakow, Poland",
+                "externalUrl": "https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-II_R1"
+              },
+              "hiringOrganization": {"name": "TestCo"}
+            }
+            """;
+
+    private static FakeHttpFetcher fetcherFor(java.util.function.BiFunction<String, String, String> handler) {
+        return new FakeHttpFetcher(handler::apply);
+    }
+
+    private static Connection freshDb(Path tmpDir) throws SQLException {
+        String dbPath = tmpDir.resolve("test.db").toString();
+        SchemaInitializer.initDb(dbPath);
+        return DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+    }
+
+    @Test
+    void fetchCandidateJobsPaginatesAndFiltersByRelevance() {
+        WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
+            if (!url.equals(LIST_URL)) {
+                throw new AssertionError("Unexpected request: " + url);
+            }
+            if (body.contains("\"offset\":0")) {
+                return PAGE_1_JSON;
+            }
+            if (body.contains("\"offset\":2")) {
+                return PAGE_2_JSON;
+            }
+            throw new AssertionError("Unexpected request body: " + body);
+        }), List.of(TEST_CO), 2);
+
+        List<WorkdayScraper.JobListing> candidates = scraper.fetchCandidateJobs(TEST_CO);
+
+        assertEquals(
+                List.of(
+                        new WorkdayScraper.JobListing("Software Engineer II", "/job/A/Software-Engineer-II_R1"),
+                        new WorkdayScraper.JobListing("Data Scientist", "/job/C/Data-Scientist_R3")),
+                candidates);
+    }
+
+    @Test
+    void runFetchesDetailAndStoresVacancy(@TempDir Path tmpDir) throws SQLException {
+        String detailUrl = "https://testco.wd1.myworkdayjobs.com/wday/cxs/testco/testco/job/A/Software-Engineer-II_R1";
+        WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
+            if (url.equals(LIST_URL)) {
+                return body.contains("\"offset\":0") ? PAGE_1_JSON : "{\"total\":3,\"jobPostings\":[]}";
+            }
+            if (url.equals(detailUrl)) {
+                return DETAIL_JSON;
+            }
+            throw new AssertionError("Unexpected request: " + url);
+        }), List.of(TEST_CO), 2);
+
+        try (Connection conn = freshDb(tmpDir)) {
+            int count = scraper.run(conn);
+            assertEquals(1, count);
+
+            try (ResultSet rs = conn.createStatement()
+                    .executeQuery("SELECT source, title, company, location, raw_text, url FROM vacancies")) {
+                assertTrue(rs.next());
+                assertEquals("workday", rs.getString("source"));
+                assertEquals("Software Engineer II", rs.getString("title"));
+                assertEquals("TestCo", rs.getString("company"));
+                assertEquals("Krakow, Poland", rs.getString("location"));
+                assertEquals("Build \nthings\n with us.", rs.getString("raw_text"));
+                assertEquals("https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-II_R1", rs.getString("url"));
+            }
+        }
+    }
+}

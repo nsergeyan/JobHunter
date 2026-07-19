@@ -3,6 +3,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
 
 # Data & secrets
 data/
@@ -13,3 +14,8 @@ data/
 
 # OS
 .DS_Store
+
+# Java / Gradle
+JobHunterTech/build/
+JobHunterTech/.gradle/
+*.class

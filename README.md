@@ -10,30 +10,43 @@ for the full scope, rationale, and build order.
 
 ## Status
 
-Early scaffold — scraper and database schema only. No live scraping yet.
+Scraper + database layer built and tested (Magnet.me, StudentJob.nl, Workday-hosted
+companies e.g. Zendesk). LLM extraction, labeling, and ranking are not built yet.
+
+## Language split
+
+The scraping/database/labeling/agent-loop layers are written in **Java** (learning
+goal). The ranking-model work (steps 4-5 of the build order) will be **Python**, since
+scikit-learn/LightGBM have no comparable Java equivalent. Both share the same SQLite
+file.
 
 ## Project structure
 
 ```
-src/
-├── scrapers/     # one module per source (Magnet.me, Indeed NL, Greenhouse, Lever)
-├── db/           # SQLite schema + data access functions
-├── extraction/   # LLM -> structured JSON parsing (Pydantic schemas)
-├── labeling/     # CLI tool for recording fit ratings (0/1/2)
-├── ranking/      # feature engineering + model training
-└── analysis/     # market analysis notebooks
-data/             # gitignored, local SQLite file lives here
-tests/
+JobHunterTech/        # Java: scraper, database, (later) labeling CLI + agent loop
+├── build.gradle
+├── src/main/java/com/jobscout/
+│   ├── scraper/       # one class per source (Magnet.me, StudentJob.nl, Workday)
+│   ├── db/            # SQLite schema init + upsert
+│   └── Main.java
+└── src/test/java/com/jobscout/
+python/                # Python: ranking model + benchmark (added when that work starts)
+data/                  # gitignored, local SQLite file lives here
 ```
 
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-cp .env.example .env  # fill in your own values
+cd JobHunterTech
+cp ../.env.example ../.env  # fill in your own values -- shared at the repo root
+./gradlew test
+./gradlew run           # runs all scrapers, writes into ../data/job_scout.db
 ```
+
+Gradle's own daemon needs a JDK it supports as its runtime (JDK 26 was too new for
+Gradle 9.2 at the time this was set up) — if `./gradlew` fails with "Unsupported
+class file major version", point `JAVA_HOME` at an older JDK (21 works) before
+running it.
 
 ## Build order
 

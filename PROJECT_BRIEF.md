@@ -38,29 +38,34 @@ the core data science contribution.
    patterns, etc.).
 
 ## Tech constraints
-- Python 3.11+, macOS (PyCharm as IDE).
-- Database: SQLite to start (simple, works with PyCharm's DB viewer).
+- **Language split (revised from the original Python-only plan):** scraping,
+  database, labeling CLI, and the daily agent loop (build-order steps 1-3, 6)
+  are written in **Java** — a deliberate choice for Java learning experience,
+  not a technical necessity. The ranking-model work (steps 4-5) stays in
+  **Python**, since scikit-learn/LightGBM have no comparable Java equivalent.
+  Both share one SQLite file.
+- macOS, IntelliJ (Java side) / PyCharm (Python side, once that work starts).
+- Database: SQLite to start (simple, works with PyCharm's/IntelliJ's DB viewer).
 - Respect robots.txt and rate-limit all scrapers; this must be visible in
   code (sleep/backoff), not just claimed in docs.
-- Config/secrets via `.env`, never committed.
+- Config/secrets via `.env` at the repo root (shared by both languages),
+  never committed.
 
 ## Repo structure
 ```
 job-scout/
 ├── README.md
 ├── PROJECT_BRIEF.md
-├── pyproject.toml
 ├── .env.example
 ├── .gitignore
-├── src/
-│   ├── scrapers/       # one module per source, shared base class
-│   ├── db/             # schema + simple data access functions
-│   ├── extraction/     # LLM -> structured JSON parsing
-│   ├── labeling/        # CLI labeling tool
-│   ├── ranking/         # feature engineering + model training (later)
-│   └── analysis/        # notebooks (later)
-├── data/                 # gitignored, local SQLite file lives here
-└── tests/
+├── JobHunterTech/        # Java: scraper, database, (later) labeling CLI + agent loop
+│   ├── build.gradle
+│   ├── src/main/java/com/jobscout/
+│   │   ├── scraper/       # one class per source, shared BaseScraper/HttpFetcher
+│   │   └── db/            # schema init + simple upsert functions
+│   └── src/test/java/com/jobscout/
+├── python/                # Python: ranking model + benchmark (added when that work starts)
+└── data/                  # gitignored, local SQLite file lives here
 ```
 
 ## Working style (important for how Claude Code should help)
