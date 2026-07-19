@@ -66,6 +66,22 @@ class WorkdayScraperTest {
             }
             """;
 
+    // Real-world case: title has no seniority signal, but the description opens
+    // with one -- matches the actual Zendesk "AI Agent Abuse Prevention Engineer"
+    // posting that slipped through the title-only filter.
+    private static final String SENIOR_IN_DESCRIPTION_DETAIL_JSON = """
+            {
+              "jobPostingInfo": {
+                "title": "AI Agent Abuse Prevention Engineer",
+                "jobDescription": "<p>We are hiring a Senior Staff-level technical leader to own this area.</p>",
+                "location": "Remote, Texas, United States of America",
+                "country": {"descriptor": "United States of America"},
+                "externalUrl": "https://testco.wd1.myworkdayjobs.com/testco/job/A/AI-Agent-Abuse-Prevention-Engineer_R1"
+              },
+              "hiringOrganization": {"name": "TestCo"}
+            }
+            """;
+
     private static FakeHttpFetcher fetcherFor(java.util.function.BiFunction<String, String, String> handler) {
         return new FakeHttpFetcher(handler::apply);
     }
@@ -115,6 +131,15 @@ class WorkdayScraperTest {
     }
 
     @Test
+    void isSeniorRoleAlsoCatchesSeniorityStatedOnlyInBodyText() {
+        assertTrue(WorkdayScraper.isSeniorRole(
+                "We are hiring a Senior Staff-level technical leader to own this area."));
+        assertFalse(WorkdayScraper.isSeniorRole("You'll build features end to end with the team."));
+        assertFalse(WorkdayScraper.isSeniorRole(
+                "This Senior-mentored internship program pairs you with a senior engineer."));
+    }
+
+    @Test
     void isInTargetRegionChecksCountryDescriptorAndLocationString() throws Exception {
         JsonNode germanyByCountry = MAPPER.readTree(
                 "{\"jobPostingInfo\": {\"country\": {\"descriptor\": \"Germany\"}, \"location\": \"Berlin\"}}");
@@ -155,6 +180,35 @@ class WorkdayScraperTest {
                 assertEquals("Krakow, Poland", rs.getString("location"));
                 assertEquals("Build \nthings\n with us.", rs.getString("raw_text"));
                 assertEquals("https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-II_R1", rs.getString("url"));
+            }
+        }
+    }
+
+    @Test
+    void runSkipsPostingsWhereOnlyTheDescriptionRevealsSeniority(@TempDir Path tmpDir) throws SQLException {
+        String detailUrl = "https://testco.wd1.myworkdayjobs.com/wday/cxs/testco/testco/job/A/AI-Agent-Abuse-Prevention-Engineer_R1";
+        String listPage = """
+                {"total":1,"jobPostings":[
+                  {"title":"AI Agent Abuse Prevention Engineer","externalPath":"/job/A/AI-Agent-Abuse-Prevention-Engineer_R1"}
+                ]}
+                """;
+        WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
+            if (url.equals(LIST_URL)) {
+                return listPage;
+            }
+            if (url.equals(detailUrl)) {
+                return SENIOR_IN_DESCRIPTION_DETAIL_JSON;
+            }
+            throw new AssertionError("Unexpected request: " + url);
+        }), List.of(TEST_CO), 20);
+
+        try (Connection conn = freshDb(tmpDir)) {
+            int count = scraper.run(conn);
+            assertEquals(0, count);
+
+            try (ResultSet rs = conn.createStatement().executeQuery("SELECT COUNT(*) AS c FROM vacancies")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt("c"));
             }
         }
     }

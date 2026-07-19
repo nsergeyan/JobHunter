@@ -28,10 +28,11 @@ import java.util.regex.Pattern;
  *
  * Unlike Magnet.me/StudentJob.nl (which are NL-only student job boards),
  * Workday-hosted companies are typically global -- so this scraper filters on
- * seniority (title-based, cheap, done before fetching details) and location
- * (needs the fetched detail's structured country field; a "Krakow, Poland" style
- * locationsText string on the list response isn't reliable enough to filter on
- * before fetching).
+ * seniority (checked twice: cheaply against the title before fetching details,
+ * then again against the full description after fetching, since some companies
+ * only state seniority in the description body) and location (needs the fetched
+ * detail's structured country field; a "Krakow, Poland" style locationsText
+ * string on the list response isn't reliable enough to filter on before fetching).
  */
 public class WorkdayScraper extends BaseScraper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -105,12 +106,23 @@ public class WorkdayScraper extends BaseScraper {
     }
 
     static boolean isCandidateTitle(String title) {
-        if (!ScraperPatterns.RELEVANCE_TITLE_PATTERN.matcher(title).find()) {
+        return ScraperPatterns.RELEVANCE_TITLE_PATTERN.matcher(title).find() && !isSeniorRole(title);
+    }
+
+    /**
+     * Some companies (Zendesk included) don't put seniority in the job title at
+     * all -- "AI Agent Abuse Prevention Engineer" turned out to open with "Zendesk
+     * is hiring a Senior Staff-level technical leader..." in the description. So
+     * this same check also runs against the full description after fetching detail,
+     * not just the title.
+     */
+    static boolean isSeniorRole(String text) {
+        if (text == null || text.isBlank()) {
             return false;
         }
-        boolean senior = SENIOR_TITLE_PATTERN.matcher(title).find();
-        boolean juniorSignal = JUNIOR_INDICATOR_PATTERN.matcher(title).find();
-        return !senior || juniorSignal;
+        boolean senior = SENIOR_TITLE_PATTERN.matcher(text).find();
+        boolean juniorSignal = JUNIOR_INDICATOR_PATTERN.matcher(text).find();
+        return senior && !juniorSignal;
     }
 
     public JsonNode fetchDetail(WorkdayCompany company, JobListing listing) {
@@ -153,6 +165,13 @@ public class WorkdayScraper extends BaseScraper {
 
                 if (!isInTargetRegion(detail)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe/US");
+                    continue;
+                }
+
+                String description = detail.path("jobPostingInfo").path("jobDescription").asText("");
+                if (isSeniorRole(description)) {
+                    System.out.println("Skipping " + company.company() + " \"" + listing.title()
+                            + "\": description indicates a senior role");
                     continue;
                 }
 
