@@ -16,6 +16,24 @@ public final class ScraperPatterns {
                     + "|\\bprogrammer\\b|devops",
             Pattern.CASE_INSENSITIVE);
 
+    /**
+     * Not interested in mobile or frontend roles, even if the title otherwise looks
+     * relevant -- a true exclusion, not just an omission from RELEVANCE_TITLE_PATTERN,
+     * since a title like "Frontend Developer" still matches that pattern's generic
+     * \bdeveloper\b and would otherwise slip through.
+     */
+    public static final Pattern EXCLUDED_ROLE_PATTERN = Pattern.compile(
+            "\\bandroid\\b|\\bios\\b|\\breact native\\b|\\bflutter\\b|\\bmobile\\b"
+                    + "|frontend|front[\\s-]end",
+            Pattern.CASE_INSENSITIVE);
+
     private ScraperPatterns() {
+    }
+
+    /** Relevant, not excluded (mobile/frontend), and not senior -- the shared title-only pre-filter every scraper uses. */
+    public static boolean isCandidateTitle(String title) {
+        return RELEVANCE_TITLE_PATTERN.matcher(title).find()
+                && !EXCLUDED_ROLE_PATTERN.matcher(title).find()
+                && !SeniorityFilter.isSeniorRole(title);
     }
 }

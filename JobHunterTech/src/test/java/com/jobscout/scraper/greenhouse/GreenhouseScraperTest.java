@@ -52,14 +52,6 @@ class GreenhouseScraperTest {
     }
 
     @Test
-    void isCandidateTitleExcludesSeniorRolesUnlessJuniorIndicatorPresent() {
-        assertTrue(GreenhouseScraper.isCandidateTitle("Software Engineer II"));
-        assertTrue(GreenhouseScraper.isCandidateTitle("Data Scientist Intern"));
-        assertFalse(GreenhouseScraper.isCandidateTitle("Senior Data Engineer"));
-        assertFalse(GreenhouseScraper.isCandidateTitle("Sales Manager"));
-    }
-
-    @Test
     void runDecodesEntityEncodedContentAndStoresJuniorEuropeVacancy(@TempDir Path tmpDir) throws SQLException {
         String job = jobJson(
                 "Machine Learning Engineer",

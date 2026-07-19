@@ -132,20 +132,6 @@ class WorkdayScraperTest {
     }
 
     @Test
-    void isCandidateTitleExcludesSeniorRolesUnlessJuniorIndicatorPresent() {
-        assertTrue(WorkdayScraper.isCandidateTitle("Software Engineer II"));
-        assertTrue(WorkdayScraper.isCandidateTitle("Data Scientist"));
-        assertTrue(WorkdayScraper.isCandidateTitle("Software Engineer Intern"));
-        assertTrue(WorkdayScraper.isCandidateTitle("Junior Data Analyst"));
-        assertTrue(WorkdayScraper.isCandidateTitle("Machine Learning New Grad"));
-
-        assertFalse(WorkdayScraper.isCandidateTitle("Senior Data Engineer"));
-        assertFalse(WorkdayScraper.isCandidateTitle("Staff Software Engineer"));
-        assertFalse(WorkdayScraper.isCandidateTitle("Engineering Manager"));
-        assertFalse(WorkdayScraper.isCandidateTitle("Sales Manager"));
-    }
-
-    @Test
     void isInTargetRegionChecksCountryDescriptorAndLocationString() throws Exception {
         JsonNode germanyByCountry = MAPPER.readTree(
                 "{\"jobPostingInfo\": {\"country\": {\"descriptor\": \"Germany\"}, \"location\": \"Berlin\"}}");

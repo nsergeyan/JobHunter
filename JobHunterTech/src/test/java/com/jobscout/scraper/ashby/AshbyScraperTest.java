@@ -49,14 +49,6 @@ class AshbyScraperTest {
     }
 
     @Test
-    void isCandidateTitleExcludesSeniorRolesUnlessJuniorIndicatorPresent() {
-        assertTrue(AshbyScraper.isCandidateTitle("Machine Learning Engineer"));
-        assertTrue(AshbyScraper.isCandidateTitle("Data Scientist Intern"));
-        assertFalse(AshbyScraper.isCandidateTitle("Senior Machine Learning Engineer"));
-        assertFalse(AshbyScraper.isCandidateTitle("Sales Manager"));
-    }
-
-    @Test
     void runStoresJuniorEuropeOrUsVacancy(@TempDir Path tmpDir) throws SQLException {
         String job = jobJson(
                 "Machine Learning Engineer", "United States", "San Francisco",

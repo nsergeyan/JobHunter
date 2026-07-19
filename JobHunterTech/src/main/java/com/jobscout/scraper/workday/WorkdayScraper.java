@@ -84,17 +84,13 @@ public class WorkdayScraper extends BaseScraper {
             for (JsonNode posting : postings) {
                 String title = posting.path("title").asText("");
                 String externalPath = posting.path("externalPath").asText(null);
-                if (externalPath != null && isCandidateTitle(title)) {
+                if (externalPath != null && ScraperPatterns.isCandidateTitle(title)) {
                     candidates.add(new JobListing(title, externalPath));
                 }
             }
             offset += pageSize;
         }
         return candidates;
-    }
-
-    static boolean isCandidateTitle(String title) {
-        return ScraperPatterns.RELEVANCE_TITLE_PATTERN.matcher(title).find() && !SeniorityFilter.isSeniorRole(title);
     }
 
     public JsonNode fetchDetail(WorkdayCompany company, JobListing listing) {

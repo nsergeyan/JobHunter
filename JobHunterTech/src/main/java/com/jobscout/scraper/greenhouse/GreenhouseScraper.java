@@ -71,10 +71,6 @@ public class GreenhouseScraper extends BaseScraper {
         }
     }
 
-    static boolean isCandidateTitle(String title) {
-        return ScraperPatterns.RELEVANCE_TITLE_PATTERN.matcher(title).find() && !SeniorityFilter.isSeniorRole(title);
-    }
-
     public VacancyRecord toVacancy(GreenhouseCompany company, JsonNode job) {
         String title = job.path("title").asText("");
         String url = job.path("absolute_url").asText(null);
@@ -106,7 +102,7 @@ public class GreenhouseScraper extends BaseScraper {
             }
             for (JsonNode job : jobs) {
                 String title = job.path("title").asText("");
-                if (!isCandidateTitle(title)) {
+                if (!ScraperPatterns.isCandidateTitle(title)) {
                     continue;
                 }
 

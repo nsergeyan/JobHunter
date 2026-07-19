@@ -67,10 +67,6 @@ public class AshbyScraper extends BaseScraper {
         }
     }
 
-    static boolean isCandidateTitle(String title) {
-        return ScraperPatterns.RELEVANCE_TITLE_PATTERN.matcher(title).find() && !SeniorityFilter.isSeniorRole(title);
-    }
-
     static boolean isInTargetRegion(JsonNode job) {
         String country = job.path("address").path("postalAddress").path("addressCountry").asText("");
         if (TargetRegion.isInScope(country)) {
@@ -105,7 +101,7 @@ public class AshbyScraper extends BaseScraper {
             }
             for (JsonNode job : jobs) {
                 String title = job.path("title").asText("");
-                if (!isCandidateTitle(title)) {
+                if (!ScraperPatterns.isCandidateTitle(title)) {
                     continue;
                 }
 
