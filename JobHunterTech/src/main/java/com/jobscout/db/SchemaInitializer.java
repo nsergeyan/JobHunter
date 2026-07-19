@@ -11,12 +11,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/**
- * Creates the SQLite database from the bundled schema.sql resource. Loaded via the
- * classpath (not a relative file path) so it works regardless of the working
- * directory a jar is launched from -- the idiomatic Java approach, unlike Python's
- * Path(__file__).parent pattern.
- */
+
 public final class SchemaInitializer {
     private SchemaInitializer() {
     }

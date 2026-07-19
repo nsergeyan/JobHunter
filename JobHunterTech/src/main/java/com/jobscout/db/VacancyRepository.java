@@ -5,7 +5,6 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.Instant;
 
-/** Same upsert logic as the Python repository.py: dedup on (source, url). */
 public final class VacancyRepository {
     private static final String UPSERT_SQL = """
             INSERT INTO vacancies (source, url, title, company, location, raw_text, scraped_at, first_seen, last_seen)

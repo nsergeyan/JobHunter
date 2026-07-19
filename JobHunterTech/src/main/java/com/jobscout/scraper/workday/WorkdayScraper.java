@@ -9,10 +9,12 @@ import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JobPostingHtml;
 import com.jobscout.scraper.ScraperException;
 import com.jobscout.scraper.ScraperPatterns;
+import com.jobscout.scraper.TargetRegion;
 
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Scraper for companies whose careers site is hosted on Workday (cxs) rather than
@@ -23,10 +25,28 @@ import java.util.List;
  * Two-step fetch per company, same "list page then detail page" shape as the
  * Magnet.me/StudentJob scrapers: POST .../jobs (paginated) for the listing, then
  * GET .../job/<path> per matched posting for the full description.
+ *
+ * Unlike Magnet.me/StudentJob.nl (which are NL-only student job boards),
+ * Workday-hosted companies are typically global -- so this scraper filters on
+ * seniority (title-based, cheap, done before fetching details) and location
+ * (needs the fetched detail's structured country field; a "Krakow, Poland" style
+ * locationsText string on the list response isn't reliable enough to filter on
+ * before fetching).
  */
 public class WorkdayScraper extends BaseScraper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int PAGE_SIZE = 20;
+
+    // Titles containing one of these read as a senior role...
+    private static final Pattern SENIOR_TITLE_PATTERN = Pattern.compile(
+            "\\bsenior\\b|\\bsr\\.?\\b|\\bstaff\\b|\\bprincipal\\b|\\blead\\b|\\bdirector\\b|\\bmanager\\b"
+                    + "|\\bvp\\b|\\bvice president\\b|\\bchief\\b|\\bhead of\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    // ...unless it also explicitly says junior/intern/graduate -- keep those regardless.
+    private static final Pattern JUNIOR_INDICATOR_PATTERN = Pattern.compile(
+            "\\bintern(ship)?\\b|\\bjunior\\b|\\bjr\\.?\\b|\\bgraduate\\b|\\bentry[- ]level\\b|\\bnew grad\\b",
+            Pattern.CASE_INSENSITIVE);
 
     // Grows by hand as more Workday-hosted companies are identified (find the
     // tenant/site by visiting the company's careers page and reading its URL).
@@ -56,7 +76,7 @@ public class WorkdayScraper extends BaseScraper {
         return "workday";
     }
 
-    /** Returns (title, externalPath) pairs for postings whose title passes the relevance filter. */
+    /** Returns (title, externalPath) pairs for postings that pass the relevance + seniority filters. */
     public List<JobListing> fetchCandidateJobs(WorkdayCompany company) {
         List<JobListing> candidates = new ArrayList<>();
         int offset = 0;
@@ -75,7 +95,7 @@ public class WorkdayScraper extends BaseScraper {
             for (JsonNode posting : postings) {
                 String title = posting.path("title").asText("");
                 String externalPath = posting.path("externalPath").asText(null);
-                if (externalPath != null && ScraperPatterns.RELEVANCE_TITLE_PATTERN.matcher(title).find()) {
+                if (externalPath != null && isCandidateTitle(title)) {
                     candidates.add(new JobListing(title, externalPath));
                 }
             }
@@ -84,13 +104,24 @@ public class WorkdayScraper extends BaseScraper {
         return candidates;
     }
 
-    public VacancyRecord toVacancy(WorkdayCompany company, JobListing listing) {
-        String detailUrl = "https://" + company.host() + "/wday/cxs/" + company.tenant() + "/" + company.site() + listing.externalPath();
-        JsonNode detail = parse(fetcher.get(detailUrl), detailUrl);
-        JsonNode info = detail.path("jobPostingInfo");
+    static boolean isCandidateTitle(String title) {
+        if (!ScraperPatterns.RELEVANCE_TITLE_PATTERN.matcher(title).find()) {
+            return false;
+        }
+        boolean senior = SENIOR_TITLE_PATTERN.matcher(title).find();
+        boolean juniorSignal = JUNIOR_INDICATOR_PATTERN.matcher(title).find();
+        return !senior || juniorSignal;
+    }
 
+    public JsonNode fetchDetail(WorkdayCompany company, JobListing listing) {
+        String detailUrl = detailUrl(company, listing);
+        return parse(fetcher.get(detailUrl), detailUrl);
+    }
+
+    public VacancyRecord toVacancy(WorkdayCompany company, JobListing listing, JsonNode detail) {
+        JsonNode info = detail.path("jobPostingInfo");
         String title = info.path("title").asText(listing.title());
-        String url = info.path("externalUrl").asText(detailUrl);
+        String url = info.path("externalUrl").asText(detailUrl(company, listing));
         String location = info.path("location").asText(null);
         String rawText = JobPostingHtml.htmlToText(info.path("jobDescription").asText(""));
         String companyName = detail.path("hiringOrganization").path("name").asText(company.company());
@@ -98,22 +129,43 @@ public class WorkdayScraper extends BaseScraper {
         return new VacancyRecord(sourceName(), url, title, companyName, location, rawText);
     }
 
+    /** Europe + US -- see TargetRegion. Structured country field first, free-text location as fallback. */
+    static boolean isInTargetRegion(JsonNode detail) {
+        JsonNode info = detail.path("jobPostingInfo");
+        String country = info.path("country").path("descriptor").asText("");
+        if (TargetRegion.isInScope(country)) {
+            return true;
+        }
+        return TargetRegion.textMentionsTargetRegion(info.path("location").asText(""));
+    }
+
     public int run(Connection conn) {
         int count = 0;
         for (WorkdayCompany company : companies) {
             for (JobListing listing : fetchCandidateJobs(company)) {
-                VacancyRecord vacancy;
+                JsonNode detail;
                 try {
-                    vacancy = toVacancy(company, listing);
+                    detail = fetchDetail(company, listing);
                 } catch (ScraperException exc) {
                     System.out.println("Skipping " + company.company() + " " + listing.externalPath() + ": " + exc.getMessage());
                     continue;
                 }
+
+                if (!isInTargetRegion(detail)) {
+                    System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe/US");
+                    continue;
+                }
+
+                VacancyRecord vacancy = toVacancy(company, listing, detail);
                 VacancyRepository.upsertVacancy(conn, vacancy);
                 count++;
             }
         }
         return count;
+    }
+
+    private static String detailUrl(WorkdayCompany company, JobListing listing) {
+        return "https://" + company.host() + "/wday/cxs/" + company.tenant() + "/" + company.site() + listing.externalPath();
     }
 
     private static JsonNode parse(String json, String url) {

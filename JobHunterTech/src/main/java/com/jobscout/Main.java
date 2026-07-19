@@ -3,8 +3,6 @@ package com.jobscout;
 import com.jobscout.db.SchemaInitializer;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JdkHttpFetcher;
-import com.jobscout.scraper.MagnetMeScraper;
-import com.jobscout.scraper.StudentJobScraper;
 import com.jobscout.scraper.workday.WorkdayScraper;
 import io.github.cdimascio.dotenv.Dotenv;
 
@@ -35,12 +33,6 @@ public final class Main {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + databasePath)) {
             int workdayCount = new WorkdayScraper(fetcher).run(conn);
             System.out.println("Upserted " + workdayCount + " vacancies from Workday-hosted companies.");
-
-            int studentJobCount = new StudentJobScraper(fetcher).run(conn);
-            System.out.println("Upserted " + studentJobCount + " vacancies from StudentJob.nl.");
-
-            int magnetMeCount = new MagnetMeScraper(fetcher).run(conn);
-            System.out.println("Upserted " + magnetMeCount + " vacancies from Magnet.me.");
         }
     }
 }

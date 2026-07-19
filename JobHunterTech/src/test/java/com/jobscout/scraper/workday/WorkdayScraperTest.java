@@ -1,5 +1,7 @@
 package com.jobscout.scraper.workday;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.SchemaInitializer;
 import com.jobscout.scraper.FakeHttpFetcher;
 import org.junit.jupiter.api.Test;
@@ -13,9 +15,12 @@ import java.sql.SQLException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkdayScraperTest {
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static final WorkdayCompany TEST_CO =
             new WorkdayCompany("TestCo", "testco.wd1.myworkdayjobs.com", "testco", "testco");
@@ -35,12 +40,26 @@ class WorkdayScraperTest {
             ]}
             """;
 
-    private static final String DETAIL_JSON = """
+    private static final String EUROPE_DETAIL_JSON = """
             {
               "jobPostingInfo": {
                 "title": "Software Engineer II",
                 "jobDescription": "<p>Build <strong>things</strong> with us.</p>",
                 "location": "Krakow, Poland",
+                "country": {"descriptor": "Poland"},
+                "externalUrl": "https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-II_R1"
+              },
+              "hiringOrganization": {"name": "TestCo"}
+            }
+            """;
+
+    private static final String OUT_OF_REGION_DETAIL_JSON = """
+            {
+              "jobPostingInfo": {
+                "title": "Software Engineer II",
+                "jobDescription": "<p>Build things with us.</p>",
+                "location": "Pune, India",
+                "country": {"descriptor": "India"},
                 "externalUrl": "https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-II_R1"
               },
               "hiringOrganization": {"name": "TestCo"}
@@ -82,14 +101,43 @@ class WorkdayScraperTest {
     }
 
     @Test
-    void runFetchesDetailAndStoresVacancy(@TempDir Path tmpDir) throws SQLException {
+    void isCandidateTitleExcludesSeniorRolesUnlessJuniorIndicatorPresent() {
+        assertTrue(WorkdayScraper.isCandidateTitle("Software Engineer II"));
+        assertTrue(WorkdayScraper.isCandidateTitle("Data Scientist"));
+        assertTrue(WorkdayScraper.isCandidateTitle("Software Engineer Intern"));
+        assertTrue(WorkdayScraper.isCandidateTitle("Junior Data Analyst"));
+        assertTrue(WorkdayScraper.isCandidateTitle("Machine Learning New Grad"));
+
+        assertFalse(WorkdayScraper.isCandidateTitle("Senior Data Engineer"));
+        assertFalse(WorkdayScraper.isCandidateTitle("Staff Software Engineer"));
+        assertFalse(WorkdayScraper.isCandidateTitle("Engineering Manager"));
+        assertFalse(WorkdayScraper.isCandidateTitle("Sales Manager"));
+    }
+
+    @Test
+    void isInTargetRegionChecksCountryDescriptorAndLocationString() throws Exception {
+        JsonNode germanyByCountry = MAPPER.readTree(
+                "{\"jobPostingInfo\": {\"country\": {\"descriptor\": \"Germany\"}, \"location\": \"Berlin\"}}");
+        assertTrue(WorkdayScraper.isInTargetRegion(germanyByCountry));
+
+        JsonNode usByLocationString = MAPPER.readTree(
+                "{\"jobPostingInfo\": {\"location\": \"Austin, Texas, United States of America\"}}");
+        assertTrue(WorkdayScraper.isInTargetRegion(usByLocationString));
+
+        JsonNode india = MAPPER.readTree(
+                "{\"jobPostingInfo\": {\"country\": {\"descriptor\": \"India\"}, \"location\": \"Pune, India\"}}");
+        assertFalse(WorkdayScraper.isInTargetRegion(india));
+    }
+
+    @Test
+    void runFetchesDetailAndStoresEuropeVacancy(@TempDir Path tmpDir) throws SQLException {
         String detailUrl = "https://testco.wd1.myworkdayjobs.com/wday/cxs/testco/testco/job/A/Software-Engineer-II_R1";
         WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
             if (url.equals(LIST_URL)) {
                 return body.contains("\"offset\":0") ? PAGE_1_JSON : "{\"total\":3,\"jobPostings\":[]}";
             }
             if (url.equals(detailUrl)) {
-                return DETAIL_JSON;
+                return EUROPE_DETAIL_JSON;
             }
             throw new AssertionError("Unexpected request: " + url);
         }), List.of(TEST_CO), 2);
@@ -107,6 +155,30 @@ class WorkdayScraperTest {
                 assertEquals("Krakow, Poland", rs.getString("location"));
                 assertEquals("Build \nthings\n with us.", rs.getString("raw_text"));
                 assertEquals("https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-II_R1", rs.getString("url"));
+            }
+        }
+    }
+
+    @Test
+    void runSkipsPostingsOutsideEuropeAndUS(@TempDir Path tmpDir) throws SQLException {
+        String detailUrl = "https://testco.wd1.myworkdayjobs.com/wday/cxs/testco/testco/job/A/Software-Engineer-II_R1";
+        WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
+            if (url.equals(LIST_URL)) {
+                return body.contains("\"offset\":0") ? PAGE_1_JSON : "{\"total\":3,\"jobPostings\":[]}";
+            }
+            if (url.equals(detailUrl)) {
+                return OUT_OF_REGION_DETAIL_JSON;
+            }
+            throw new AssertionError("Unexpected request: " + url);
+        }), List.of(TEST_CO), 2);
+
+        try (Connection conn = freshDb(tmpDir)) {
+            int count = scraper.run(conn);
+            assertEquals(0, count);
+
+            try (ResultSet rs = conn.createStatement().executeQuery("SELECT COUNT(*) AS c FROM vacancies")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt("c"));
             }
         }
     }

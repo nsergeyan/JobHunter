@@ -21,16 +21,15 @@ repositories {
 }
 
 dependencies {
-    // SQLite isn't bundled with the JDK -- this is the standard JDBC driver for it.
     implementation 'org.xerial:sqlite-jdbc:3.46.1.3'
 
-    // HTML/JSON-LD parsing -- the closest Java equivalent to BeautifulSoup.
+
     implementation 'org.jsoup:jsoup:1.18.1'
 
-    // JSON parsing (JSON-LD blocks, Workday API responses).
+
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
 
-    // Reads .env, mirrors python-dotenv's load_dotenv().
+
     implementation 'io.github.cdimascio:dotenv-java:3.0.2'
 
     testImplementation platform('org.junit:junit-bom:5.10.0')
