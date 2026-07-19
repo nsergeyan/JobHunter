@@ -12,7 +12,7 @@ public final class ScraperPatterns {
     public static final Pattern RELEVANCE_TITLE_PATTERN = Pattern.compile(
             "data[\\s-]scien|machine[\\s-]learning|\\bai\\b|artificial[\\s-]intelligence|data[\\s-]analy"
                     + "|\\bml\\b|data[\\s-]engineer|software[\\s-]engineer|software[\\s-]develop|\\bdeveloper\\b"
-                    + "|backend|back[\\s-]end|frontend|front[\\s-]end|full[\\s-]stack|fullstack"
+                    + "|backend|back[\\s-]end|full[\\s-]stack|fullstack"
                     + "|\\bprogrammer\\b|devops",
             Pattern.CASE_INSENSITIVE);
 

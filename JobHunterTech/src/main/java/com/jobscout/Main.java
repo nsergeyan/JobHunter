@@ -3,6 +3,7 @@ package com.jobscout;
 import com.jobscout.db.SchemaInitializer;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JdkHttpFetcher;
+import com.jobscout.scraper.greenhouse.GreenhouseScraper;
 import com.jobscout.scraper.workday.WorkdayScraper;
 import io.github.cdimascio.dotenv.Dotenv;
 
@@ -33,6 +34,9 @@ public final class Main {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + databasePath)) {
             int workdayCount = new WorkdayScraper(fetcher).run(conn);
             System.out.println("Upserted " + workdayCount + " vacancies from Workday-hosted companies.");
+
+            int greenhouseCount = new GreenhouseScraper(fetcher).run(conn);
+            System.out.println("Upserted " + greenhouseCount + " vacancies from Greenhouse-hosted companies.");
         }
     }
 }

@@ -2,6 +2,7 @@ package com.jobscout.scraper;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Geographic scope shared by every scraper: Europe + United States. Wide net on
@@ -21,6 +22,14 @@ public final class TargetRegion {
     private static final Set<String> US_NAMES = Set.of(
             "united states", "united states of america", "usa", "u.s.", "u.s.a.");
 
+    // Greenhouse (and likely other ATS platforms) format US locations as "City, ST"
+    // -- e.g. "San Francisco, CA", "New York City, NY" -- without spelling out
+    // "United States" at all. Matched only right after a comma to avoid false
+    // positives from unrelated two-letter substrings.
+    private static final Pattern US_STATE_ABBREVIATION_PATTERN = Pattern.compile(
+            ",\\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO"
+                    + "|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\\b");
+
     private TargetRegion() {
     }
 
@@ -33,10 +42,16 @@ public final class TargetRegion {
         return EUROPEAN_COUNTRIES.contains(normalized) || US_NAMES.contains(normalized);
     }
 
-    /** Substring search against free-text location strings (e.g. "Austin, Texas, United States"). */
+    /**
+     * Substring search against free-text location strings, e.g. "Austin, Texas,
+     * United States" or Greenhouse's "San Francisco, CA".
+     */
     public static boolean textMentionsTargetRegion(String text) {
         if (text == null || text.isBlank()) {
             return false;
+        }
+        if (US_STATE_ABBREVIATION_PATTERN.matcher(text).find()) {
+            return true;
         }
         String normalized = text.toLowerCase(Locale.ROOT);
         for (String country : EUROPEAN_COUNTRIES) {
