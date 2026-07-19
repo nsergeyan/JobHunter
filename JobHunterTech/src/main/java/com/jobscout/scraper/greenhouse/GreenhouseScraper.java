@@ -43,7 +43,11 @@ public class GreenhouseScraper extends BaseScraper {
             new GreenhouseCompany("Airbnb", "airbnb"),
             new GreenhouseCompany("Robinhood", "robinhood"),
             new GreenhouseCompany("Squarespace", "squarespace"),
-            new GreenhouseCompany("Duolingo", "duolingo"));
+            new GreenhouseCompany("Duolingo", "duolingo"),
+            new GreenhouseCompany("Coinbase", "coinbase"),
+            new GreenhouseCompany("Pinterest", "pinterest"),
+            new GreenhouseCompany("Roblox", "roblox"),
+            new GreenhouseCompany("Databricks", "databricks"));
 
     private final List<GreenhouseCompany> companies;
 

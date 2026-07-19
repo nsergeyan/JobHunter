@@ -42,7 +42,8 @@ public class SmartRecruitersScraper extends BaseScraper {
 
     // Grows by hand as more SmartRecruiters-hosted companies are identified.
     public static final List<SmartRecruitersCompany> SMARTRECRUITERS_COMPANIES = List.of(
-            new SmartRecruitersCompany("Delivery Hero", "deliveryhero"));
+            new SmartRecruitersCompany("Delivery Hero", "deliveryhero"),
+            new SmartRecruitersCompany("Wise", "wise"));
 
     private final List<SmartRecruitersCompany> companies;
     private final int pageSize;
