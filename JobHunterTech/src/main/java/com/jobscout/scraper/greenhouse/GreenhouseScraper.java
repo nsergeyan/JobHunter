@@ -47,7 +47,17 @@ public class GreenhouseScraper extends BaseScraper {
             new GreenhouseCompany("Coinbase", "coinbase"),
             new GreenhouseCompany("Pinterest", "pinterest"),
             new GreenhouseCompany("Roblox", "roblox"),
-            new GreenhouseCompany("Databricks", "databricks"));
+            new GreenhouseCompany("Databricks", "databricks"),
+            new GreenhouseCompany("Figma", "figma"),
+            new GreenhouseCompany("DeepMind", "deepmind"),
+            new GreenhouseCompany("Discord", "discord"),
+            new GreenhouseCompany("Reddit", "reddit"),
+            new GreenhouseCompany("Instacart", "instacart"),
+            new GreenhouseCompany("DoorDash", "doordashusa"),
+            new GreenhouseCompany("Affirm", "affirm"),
+            new GreenhouseCompany("Brex", "brex"),
+            new GreenhouseCompany("Vercel", "vercel"),
+            new GreenhouseCompany("Asana", "asana"));
 
     private final List<GreenhouseCompany> companies;
 

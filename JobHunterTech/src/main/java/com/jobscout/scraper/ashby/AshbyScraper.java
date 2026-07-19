@@ -39,7 +39,10 @@ public class AshbyScraper extends BaseScraper {
     public static final List<AshbyCompany> ASHBY_COMPANIES = List.of(
             new AshbyCompany("OpenAI", "openai"),
             new AshbyCompany("Snowflake", "snowflake"),
-            new AshbyCompany("Cohere", "cohere"));
+            new AshbyCompany("Cohere", "cohere"),
+            new AshbyCompany("Perplexity", "perplexity"),
+            new AshbyCompany("Ramp", "ramp"),
+            new AshbyCompany("Linear", "linear"));
 
     private final List<AshbyCompany> companies;
 
