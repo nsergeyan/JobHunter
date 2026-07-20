@@ -49,9 +49,9 @@ class AshbyScraperTest {
     }
 
     @Test
-    void runStoresJuniorEuropeOrUsVacancy(@TempDir Path tmpDir) throws SQLException {
+    void runStoresJuniorEuropeVacancy(@TempDir Path tmpDir) throws SQLException {
         String job = jobJson(
-                "Machine Learning Engineer", "United States", "San Francisco",
+                "Machine Learning Engineer", "Germany", "Berlin",
                 "Build and ship ML models with the team.");
         String jobsList = "{\"jobs\":[" + job + "]}";
         AshbyScraper scraper = new AshbyScraper(fetcherFor(jobsList), List.of(TEST_CO));
@@ -66,7 +66,7 @@ class AshbyScraperTest {
                 assertEquals("ashby", rs.getString("source"));
                 assertEquals("Machine Learning Engineer", rs.getString("title"));
                 assertEquals("TestCo", rs.getString("company"));
-                assertEquals("San Francisco", rs.getString("location"));
+                assertEquals("Berlin", rs.getString("location"));
                 assertEquals("Build and ship ML models with the team.", rs.getString("raw_text"));
                 assertEquals("https://jobs.ashbyhq.com/testco/abc123", rs.getString("url"));
             }
@@ -74,7 +74,7 @@ class AshbyScraperTest {
     }
 
     @Test
-    void runSkipsPostingsOutsideEuropeAndUS(@TempDir Path tmpDir) throws SQLException {
+    void runSkipsPostingsOutsideEurope(@TempDir Path tmpDir) throws SQLException {
         String job = jobJson("Data Scientist", "India", "Bangalore", "Analyze data at scale.");
         String jobsList = "{\"jobs\":[" + job + "]}";
         AshbyScraper scraper = new AshbyScraper(fetcherFor(jobsList), List.of(TEST_CO));

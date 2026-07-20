@@ -137,9 +137,11 @@ class WorkdayScraperTest {
                 "{\"jobPostingInfo\": {\"country\": {\"descriptor\": \"Germany\"}, \"location\": \"Berlin\"}}");
         assertTrue(WorkdayScraper.isInTargetRegion(germanyByCountry));
 
+        // Europe-only now -- a US posting must NOT pass, even with a full "United
+        // States" location string.
         JsonNode usByLocationString = MAPPER.readTree(
                 "{\"jobPostingInfo\": {\"location\": \"Austin, Texas, United States of America\"}}");
-        assertTrue(WorkdayScraper.isInTargetRegion(usByLocationString));
+        assertFalse(WorkdayScraper.isInTargetRegion(usByLocationString));
 
         JsonNode india = MAPPER.readTree(
                 "{\"jobPostingInfo\": {\"country\": {\"descriptor\": \"India\"}, \"location\": \"Pune, India\"}}");

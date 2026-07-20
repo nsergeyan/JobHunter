@@ -2,12 +2,15 @@ package com.jobscout.scraper;
 
 import java.util.Locale;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
- * Geographic scope shared by every scraper: Europe + United States. Wide net on
- * purpose -- the idea is to surface any decent opportunity worth flying/relocating
- * for, not just same-country roles.
+ * Geographic scope shared by every scraper: Europe only.
+ *
+ * Previously Europe + United States (see git history around 2026-07-20 if that
+ * scope is ever worth revisiting) -- narrowed to Europe-only because current US
+ * immigration policy makes most US roles practically unattainable regardless of
+ * whether a company nominally offers sponsorship. Same target companies (Oracle,
+ * Google, etc.) are still in scope -- just their EU-based postings, not US ones.
  */
 public final class TargetRegion {
     private static final Set<String> EUROPEAN_COUNTRIES = Set.of(
@@ -19,24 +22,13 @@ public final class TargetRegion {
             "portugal", "romania", "san marino", "serbia", "slovakia", "slovenia", "spain",
             "sweden", "switzerland", "ukraine", "united kingdom", "vatican city");
 
-    private static final Set<String> US_NAMES = Set.of(
-            "united states", "united states of america", "usa", "u.s.", "u.s.a.");
-
-    // ISO 3166-1 alpha-2 codes -- Lever's "country" field uses these (e.g. "GB",
-    // "US"), not full names like Workday/Ashby do.
+    // ISO 3166-1 alpha-2 codes -- Lever's "country" field uses these (e.g. "GB"),
+    // not full names like Workday/Ashby do.
     private static final Set<String> IN_SCOPE_COUNTRY_CODES = Set.of(
             "al", "ad", "at", "by", "be", "ba", "bg", "hr", "cy", "cz", "dk", "ee", "fi", "fr",
             "de", "gr", "hu", "is", "ie", "it", "xk", "lv", "li", "lt", "lu", "mt", "md", "mc",
             "me", "nl", "mk", "no", "pl", "pt", "ro", "sm", "rs", "sk", "si", "es", "se", "ch",
-            "ua", "gb", "va", "us");
-
-    // Greenhouse (and likely other ATS platforms) format US locations as "City, ST"
-    // -- e.g. "San Francisco, CA", "New York City, NY" -- without spelling out
-    // "United States" at all. Matched only right after a comma to avoid false
-    // positives from unrelated two-letter substrings.
-    private static final Pattern US_STATE_ABBREVIATION_PATTERN = Pattern.compile(
-            ",\\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO"
-                    + "|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\\b");
+            "ua", "gb", "va");
 
     private TargetRegion() {
     }
@@ -47,7 +39,7 @@ public final class TargetRegion {
             return false;
         }
         String normalized = countryName.toLowerCase(Locale.ROOT).strip();
-        return EUROPEAN_COUNTRIES.contains(normalized) || US_NAMES.contains(normalized);
+        return EUROPEAN_COUNTRIES.contains(normalized);
     }
 
     /** Match against a structured 2-letter ISO 3166-1 alpha-2 country code, e.g. Lever's "country" field. */
@@ -66,17 +58,9 @@ public final class TargetRegion {
         if (text == null || text.isBlank()) {
             return false;
         }
-        if (US_STATE_ABBREVIATION_PATTERN.matcher(text).find()) {
-            return true;
-        }
         String normalized = text.toLowerCase(Locale.ROOT);
         for (String country : EUROPEAN_COUNTRIES) {
             if (normalized.contains(country)) {
-                return true;
-            }
-        }
-        for (String usName : US_NAMES) {
-            if (normalized.contains(usName)) {
                 return true;
             }
         }
