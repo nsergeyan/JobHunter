@@ -57,7 +57,30 @@ public class GreenhouseScraper extends BaseScraper {
             new GreenhouseCompany("Affirm", "affirm"),
             new GreenhouseCompany("Brex", "brex"),
             new GreenhouseCompany("Vercel", "vercel"),
-            new GreenhouseCompany("Asana", "asana"));
+            new GreenhouseCompany("Asana", "asana"),
+            new GreenhouseCompany("Doctolib", "doctolib"),
+            new GreenhouseCompany("Celonis", "celonis"),
+            new GreenhouseCompany("N26", "n26"),
+            new GreenhouseCompany("Adyen", "adyen"),
+            new GreenhouseCompany("Dropbox", "dropbox"),
+            new GreenhouseCompany("Twilio", "twilio"),
+            new GreenhouseCompany("Lyft", "lyft"),
+            new GreenhouseCompany("Okta", "okta"),
+            new GreenhouseCompany("Jane Street", "janestreet"),
+            new GreenhouseCompany("IMC Trading", "imc"),
+            new GreenhouseCompany("Jump Trading", "jumptrading"),
+            new GreenhouseCompany("Point72", "point72"),
+            new GreenhouseCompany("MongoDB", "mongodb"),
+            new GreenhouseCompany("GetYourGuide", "getyourguide"),
+            new GreenhouseCompany("GitLab", "gitlab"),
+            new GreenhouseCompany("Elastic", "elastic"),
+            new GreenhouseCompany("Monzo", "monzo"),
+            new GreenhouseCompany("Optiver", "optiver"),
+            new GreenhouseCompany("TrueLayer", "truelayer"),
+            new GreenhouseCompany("GoCardless", "gocardless"),
+            new GreenhouseCompany("Form3", "form3"),
+            new GreenhouseCompany("Trustpilot", "trustpilot"),
+            new GreenhouseCompany("Wolt", "wolt"));
 
     private final List<GreenhouseCompany> companies;
 

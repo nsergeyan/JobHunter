@@ -2,6 +2,7 @@ package com.jobscout.scraper.smartrecruiters;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jobscout.db.SeenPostingRepository;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
@@ -44,7 +45,9 @@ public class SmartRecruitersScraper extends BaseScraper {
     public static final List<SmartRecruitersCompany> SMARTRECRUITERS_COMPANIES = List.of(
             new SmartRecruitersCompany("Delivery Hero", "deliveryhero"),
             new SmartRecruitersCompany("Wise", "wise"),
-            new SmartRecruitersCompany("Bosch", "BoschGroup"));
+            new SmartRecruitersCompany("Bosch", "BoschGroup"),
+            new SmartRecruitersCompany("ServiceNow", "servicenow"),
+            new SmartRecruitersCompany("Canva", "canva"));
 
     private final List<SmartRecruitersCompany> companies;
     private final int pageSize;
@@ -81,6 +84,10 @@ public class SmartRecruitersScraper extends BaseScraper {
             JsonNode response = parse(fetcher.get(url), url);
 
             total = response.path("totalFound").asInt(0);
+            // Same reasoning as WorkdayScraper: a large company's raw listing can take
+            // many rate-limited pages, and this loop had no logging -- silent for minutes.
+            System.out.println(company.company() + ": fetched postings " + offset + "-"
+                    + Math.min(offset + pageSize, total) + " of " + total);
             JsonNode content = response.path("content");
             if (!content.isArray() || content.isEmpty()) {
                 break;
@@ -130,6 +137,12 @@ public class SmartRecruitersScraper extends BaseScraper {
         int count = 0;
         for (SmartRecruitersCompany company : companies) {
             for (JobListing listing : fetchCandidateJobs(company)) {
+                // Already evaluated (accepted or rejected) on a previous run -- skip the
+                // detail fetch entirely rather than re-requesting and re-filtering it.
+                if (SeenPostingRepository.isSeen(conn, sourceName(), listing.id())) {
+                    continue;
+                }
+
                 JsonNode detail;
                 try {
                     detail = fetchDetail(company, listing);
@@ -140,6 +153,7 @@ public class SmartRecruitersScraper extends BaseScraper {
 
                 if (!isInTargetRegion(detail)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe/US");
+                    SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), false);
                     continue;
                 }
 
@@ -147,17 +161,20 @@ public class SmartRecruitersScraper extends BaseScraper {
                 if (SeniorityFilter.isSeniorRole(description)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title()
                             + "\": description indicates a senior role");
+                    SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), false);
                     continue;
                 }
 
                 if (SeniorityFilter.requiresTooMuchExperience(description)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title()
                             + "\": requires more than 2 years of experience");
+                    SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), false);
                     continue;
                 }
 
                 VacancyRecord vacancy = toVacancy(company, listing, detail);
                 VacancyRepository.upsertVacancy(conn, vacancy);
+                SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), true);
                 count++;
             }
         }

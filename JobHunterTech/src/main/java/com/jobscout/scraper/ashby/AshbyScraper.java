@@ -42,7 +42,17 @@ public class AshbyScraper extends BaseScraper {
             new AshbyCompany("Cohere", "cohere"),
             new AshbyCompany("Perplexity", "perplexity"),
             new AshbyCompany("Ramp", "ramp"),
-            new AshbyCompany("Linear", "linear"));
+            new AshbyCompany("Linear", "linear"),
+            new AshbyCompany("Alan", "alan"),
+            new AshbyCompany("Voodoo", "voodoo"),
+            new AshbyCompany("UiPath", "uipath"),
+            new AshbyCompany("Notion", "notion"),
+            new AshbyCompany("Miro", "miro"),
+            new AshbyCompany("Hudson River Trading", "hrt"),
+            new AshbyCompany("Cubist", "cubist"),
+            new AshbyCompany("Bolt", "bolt"),
+            new AshbyCompany("Mollie", "mollie"),
+            new AshbyCompany("ClearBank", "clearbank"));
 
     private final List<AshbyCompany> companies;
 

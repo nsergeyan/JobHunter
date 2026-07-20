@@ -37,7 +37,11 @@ public class LeverScraper extends BaseScraper {
     public static final List<LeverCompany> LEVER_COMPANIES = List.of(
             new LeverCompany("Mistral AI", "mistral"),
             new LeverCompany("Palantir", "palantir"),
-            new LeverCompany("Spotify", "spotify"));
+            new LeverCompany("Spotify", "spotify"),
+            new LeverCompany("Aircall", "aircall"),
+            new LeverCompany("Qonto", "qonto"),
+            new LeverCompany("Malt", "malt"),
+            new LeverCompany("Atlassian", "atlassian"));
 
     private final List<LeverCompany> companies;
 

@@ -41,3 +41,19 @@ CREATE TABLE IF NOT EXISTS vacancy_extractions (
     language_requirement TEXT,
     remote_policy TEXT,            -- remote | hybrid | onsite | unknown
     extraction_model TEXT NOT NULL,
+    extracted_at TEXT NOT NULL     -- ISO 8601 timestamp of the extraction call
+);
+
+-- Lets two-step scrapers (SmartRecruiters, Workday) skip re-fetching a posting's
+-- full detail page on every rerun once it's already been evaluated once, accepted
+-- or not. Greenhouse/Lever/Ashby return everything (list + full content) in one
+-- request per company already, so there's no separate detail-fetch step for them
+-- to skip -- this table only matters for the two platforms that do a second
+-- request per candidate posting.
+CREATE TABLE IF NOT EXISTS seen_postings (
+    source TEXT NOT NULL,
+    external_id TEXT NOT NULL,     -- SmartRecruiters posting id, or Workday externalPath
+    accepted INTEGER NOT NULL,     -- 1 if it passed filters and was stored, 0 if rejected
+    seen_at TEXT NOT NULL,         -- ISO 8601 timestamp of the first evaluation
+    PRIMARY KEY (source, external_id)
+);

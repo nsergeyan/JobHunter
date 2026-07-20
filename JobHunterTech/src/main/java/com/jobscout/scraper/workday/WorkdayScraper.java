@@ -2,6 +2,7 @@ package com.jobscout.scraper.workday;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jobscout.db.SeenPostingRepository;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
@@ -40,7 +41,11 @@ public class WorkdayScraper extends BaseScraper {
     // Grows by hand as more Workday-hosted companies are identified (find the
     // tenant/site by visiting the company's careers page and reading its URL).
     public static final List<WorkdayCompany> WORKDAY_COMPANIES = List.of(
-            new WorkdayCompany("Zendesk", "zendesk.wd1.myworkdayjobs.com", "zendesk", "zendesk"));
+            new WorkdayCompany("Zendesk", "zendesk.wd1.myworkdayjobs.com", "zendesk", "zendesk"),
+            new WorkdayCompany("Workday", "workday.wd5.myworkdayjobs.com", "workday", "Workday"),
+            new WorkdayCompany("Capital One", "capitalone.wd12.myworkdayjobs.com", "capitalone", "Capital_One"),
+            new WorkdayCompany("Samsung", "sec.wd3.myworkdayjobs.com", "sec", "Samsung_Careers"),
+            new WorkdayCompany("NVIDIA", "nvidia.wd5.myworkdayjobs.com", "nvidia", "NVIDIAExternalCareerSite"));
 
     private final List<WorkdayCompany> companies;
     private final int pageSize;
@@ -77,6 +82,11 @@ public class WorkdayScraper extends BaseScraper {
             JsonNode response = parse(fetcher.post(url, body), url);
 
             total = response.path("total").asInt(0);
+            // This loop can be dozens/hundreds of rate-limited requests for a large
+            // company (e.g. 2000 postings / 20 per page = 100 requests) -- without this,
+            // the console goes silent for minutes before any per-job logging kicks in.
+            System.out.println(company.company() + ": fetched postings " + offset + "-"
+                    + Math.min(offset + pageSize, total) + " of " + total);
             JsonNode postings = response.path("jobPostings");
             if (!postings.isArray() || postings.isEmpty()) {
                 break;
@@ -104,7 +114,14 @@ public class WorkdayScraper extends BaseScraper {
         String url = info.path("externalUrl").asText(detailUrl(company, listing));
         String location = info.path("location").asText(null);
         String rawText = JobPostingHtml.htmlToText(info.path("jobDescription").asText(""));
-        String companyName = detail.path("hiringOrganization").path("name").asText(company.company());
+        // Some tenants (e.g. Capital One) return hiringOrganization.name as an empty
+        // string rather than omitting it -- .asText(fallback) only substitutes the
+        // fallback for a MISSING field, not a present-but-blank one, so check blankness
+        // explicitly rather than relying on the Jackson default-value parameter.
+        String companyName = detail.path("hiringOrganization").path("name").asText("");
+        if (companyName.isBlank()) {
+            companyName = company.company();
+        }
 
         return new VacancyRecord(sourceName(), url, title, companyName, location, rawText);
     }
@@ -123,6 +140,12 @@ public class WorkdayScraper extends BaseScraper {
         int count = 0;
         for (WorkdayCompany company : companies) {
             for (JobListing listing : fetchCandidateJobs(company)) {
+                // Already evaluated (accepted or rejected) on a previous run -- skip the
+                // detail fetch entirely rather than re-requesting and re-filtering it.
+                if (SeenPostingRepository.isSeen(conn, sourceName(), listing.externalPath())) {
+                    continue;
+                }
+
                 JsonNode detail;
                 try {
                     detail = fetchDetail(company, listing);
@@ -133,6 +156,7 @@ public class WorkdayScraper extends BaseScraper {
 
                 if (!isInTargetRegion(detail)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe/US");
+                    SeenPostingRepository.markSeen(conn, sourceName(), listing.externalPath(), false);
                     continue;
                 }
 
@@ -140,18 +164,22 @@ public class WorkdayScraper extends BaseScraper {
                 if (SeniorityFilter.isSeniorRole(description)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title()
                             + "\": description indicates a senior role");
+                    SeenPostingRepository.markSeen(conn, sourceName(), listing.externalPath(), false);
                     continue;
                 }
 
                 if (SeniorityFilter.requiresTooMuchExperience(description)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title()
                             + "\": requires more than 2 years of experience");
+                    SeenPostingRepository.markSeen(conn, sourceName(), listing.externalPath(), false);
                     continue;
                 }
 
                 VacancyRecord vacancy = toVacancy(company, listing, detail);
                 VacancyRepository.upsertVacancy(conn, vacancy);
+                SeenPostingRepository.markSeen(conn, sourceName(), listing.externalPath(), true);
                 count++;
+                System.out.println("Accepted " + company.company() + " \"" + listing.title() + "\" (" + count + " so far)");
             }
         }
         return count;
