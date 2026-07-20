@@ -21,6 +21,8 @@ public final class Main {
     }
 
     public static void main(String[] args) throws SQLException {
+        SleepPrevention.preventSleepWhileRunning();
+
         // .env lives at the repo root (shared with the future Python ranking-model
         // code), one directory up from this Gradle project. systemProperties() makes
         // its values readable via System.getProperty(), which JdkHttpFetcher also

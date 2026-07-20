@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -35,8 +36,31 @@ public final class SchemaInitializer {
                     stmt.executeUpdate(trimmed);
                 }
             }
+            // CREATE TABLE IF NOT EXISTS in schema.sql only helps on a fresh DB -- it's a
+            // no-op against a table that already exists with an older column set. SQLite
+            // has no "ADD COLUMN IF NOT EXISTS", so new columns on existing tables need an
+            // explicit, checked migration here instead.
+            addColumnIfMissing(conn, "vacancy_extractions", "salary_period", "TEXT");
         } catch (SQLException exc) {
             throw new RuntimeException("Failed to initialize database at " + dbPath, exc);
+        }
+    }
+
+    private static void addColumnIfMissing(Connection conn, String table, String column, String columnType) {
+        try (Statement checkStmt = conn.createStatement();
+                ResultSet rs = checkStmt.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (rs.next()) {
+                if (column.equals(rs.getString("name"))) {
+                    return;
+                }
+            }
+        } catch (SQLException exc) {
+            throw new RuntimeException("Failed to inspect columns of " + table, exc);
+        }
+        try (Statement alterStmt = conn.createStatement()) {
+            alterStmt.executeUpdate("ALTER TABLE " + table + " ADD COLUMN " + column + " " + columnType);
+        } catch (SQLException exc) {
+            throw new RuntimeException("Failed to add column " + column + " to " + table, exc);
         }
     }
 

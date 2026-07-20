@@ -24,3 +24,20 @@ CREATE TABLE IF NOT EXISTS vacancies (
 
 CREATE INDEX IF NOT EXISTS idx_vacancies_scraped_at ON vacancies (scraped_at);
 CREATE INDEX IF NOT EXISTS idx_vacancies_company ON vacancies (company);
+
+-- Extracted structured fields per vacancy (LLM extraction, build-order step 2).
+-- Kept as a separate table rather than new columns on vacancies: SQLite has no
+-- "ALTER TABLE ADD COLUMN IF NOT EXISTS", but CREATE TABLE IF NOT EXISTS re-runs
+-- safely on every startup, so this stays idempotent like the rest of this file.
+CREATE TABLE IF NOT EXISTS vacancy_extractions (
+    vacancy_id INTEGER PRIMARY KEY REFERENCES vacancies(id) ON DELETE CASCADE,
+    skills TEXT,                   -- JSON array, e.g. '["Python","SQL"]'
+    seniority TEXT,                -- internship | junior | mid | senior | unknown
+    salary_min INTEGER,
+    salary_max INTEGER,
+    salary_currency TEXT,          -- ISO code, e.g. 'USD', 'EUR'
+    salary_period TEXT,            -- hourly | yearly | unknown -- don't compare salary_min/max
+                                    -- across rows without checking this first
+    language_requirement TEXT,
+    remote_policy TEXT,            -- remote | hybrid | onsite | unknown
+    extraction_model TEXT NOT NULL,

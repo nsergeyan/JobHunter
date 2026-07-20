@@ -69,15 +69,24 @@ public class JdkHttpFetcher implements HttpFetcher {
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 400) {
-                throw new ScraperException(
-                        "Request to " + url + " failed with status " + response.statusCode());
+                // Include the response body -- APIs like Gemini put the actual reason
+                // (rate limit vs. quota exhausted vs. bad request) in a JSON error body,
+                // and a bare status code isn't enough to tell those apart.
+                throw new ScraperException("Request to " + redactQuery(url) + " failed with status "
+                        + response.statusCode() + ": " + response.body());
             }
             return response.body();
         } catch (java.io.IOException | InterruptedException exc) {
-            throw new ScraperException("Request to " + url + " failed: " + exc.getMessage(), exc);
+            throw new ScraperException("Request to " + redactQuery(url) + " failed: " + exc.getMessage(), exc);
         } finally {
             sleepBetweenRequests();
         }
+    }
+
+    /** Query strings can carry secrets (e.g. Gemini's ?key=...) -- never let them reach logs/exceptions. */
+    private static String redactQuery(String url) {
+        int queryIndex = url.indexOf('?');
+        return queryIndex == -1 ? url : url.substring(0, queryIndex) + "?[redacted]";
     }
 
     private void sleepBetweenRequests() {
