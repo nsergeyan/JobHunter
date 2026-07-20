@@ -4,8 +4,13 @@ See PROJECT_BRIEF.md for full scope, rationale, and build order. Key rules for w
 in this repo:
 
 ## Build order — do not skip ahead
-1. Scraper + database (Magnet.me, Indeed NL, Greenhouse/Lever career pages)
-2. LLM extraction into structured fields (Pydantic schema)
+1. Scraper + database — done. One scraper class per ATS platform (Workday,
+   Greenhouse, Lever, Ashby, SmartRecruiters), ~80 companies verified against
+   the real posting API. Europe-only scope (narrowed from Europe+US on
+   2026-07-20 — see PROJECT_BRIEF.md for why).
+2. LLM extraction into structured fields — done. Java, hand-built JSON
+   schema (not Pydantic), two interchangeable providers (Ollama default,
+   Gemini alternative) sharing one prompt.
 3. Labeling CLI (0/1/2 fit rating) — no ML work before ~200-300 labels exist
 4. Ranking model (logistic regression baseline first, then LightGBM if it wins)
 5. Benchmark: trained model vs. LLM-as-judge vs. cosine similarity, precision@k
