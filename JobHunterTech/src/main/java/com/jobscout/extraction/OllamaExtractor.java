@@ -62,6 +62,8 @@ public class OllamaExtractor implements Extractor {
 
         ObjectNode properties = MAPPER.createObjectNode();
 
+        properties.set("summary", typedField("string", ExtractionPrompt.SUMMARY_DESCRIPTION));
+
         ObjectNode skills = MAPPER.createObjectNode();
         skills.put("type", "array");
         ObjectNode skillsItems = MAPPER.createObjectNode();
@@ -81,6 +83,7 @@ public class OllamaExtractor implements Extractor {
         schema.set("properties", properties);
 
         ArrayNode required = MAPPER.createArrayNode();
+        required.add("summary");
         required.add("skills");
         required.add("seniority");
         required.add("salary_min");
@@ -135,6 +138,7 @@ public class OllamaExtractor implements Extractor {
         fields.path("skills").forEach(node -> skills.add(node.asText()));
 
         return new VacancyExtraction(
+                nullableString(fields.path("summary")),
                 skills,
                 fields.path("seniority").asText("unknown"),
                 nullableInt(fields.path("salary_min")),

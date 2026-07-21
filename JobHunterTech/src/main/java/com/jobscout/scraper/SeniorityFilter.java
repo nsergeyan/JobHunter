@@ -1,5 +1,7 @@
 package com.jobscout.scraper;
 
+import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,6 +36,21 @@ public final class SeniorityFilter {
     private static final Pattern YEARS_EXPERIENCE_PATTERN = Pattern.compile(
             "\\b(\\d{1,2})\\s*(?:[-–]|to)?\\s*\\d{0,2}\\+?\\s*years?\\b(?!\\s*(?:ago|old)\\b)",
             Pattern.CASE_INSENSITIVE);
+
+    // Some postings spell the number out (e.g. "at least three years hands-on
+    // experience") instead of using a digit -- YEARS_EXPERIENCE_PATTERN alone
+    // misses those entirely. Only covers one-ten: phrasing above that is rare
+    // enough in practice that it's not worth the added pattern complexity, and
+    // such postings tend to also trip SENIOR_TITLE_PATTERN anyway.
+    private static final Map<String, Integer> NUMBER_WORDS = Map.ofEntries(
+            Map.entry("one", 1), Map.entry("two", 2), Map.entry("three", 3), Map.entry("four", 4),
+            Map.entry("five", 5), Map.entry("six", 6), Map.entry("seven", 7), Map.entry("eight", 8),
+            Map.entry("nine", 9), Map.entry("ten", 10));
+    private static final Pattern YEARS_EXPERIENCE_WORD_PATTERN = Pattern.compile(
+            "\\b(" + String.join("|", NUMBER_WORDS.keySet()) + ")\\s*(?:[-–]|to)?\\s*"
+                    + "(?:" + String.join("|", NUMBER_WORDS.keySet()) + ")?\\+?\\s*years?\\b(?!\\s*(?:ago|old)\\b)",
+            Pattern.CASE_INSENSITIVE);
+
     private static final int MAX_JUNIOR_YEARS = 2;
 
     private SeniorityFilter() {
@@ -62,6 +79,14 @@ public final class SeniorityFilter {
         Matcher matcher = YEARS_EXPERIENCE_PATTERN.matcher(text);
         while (matcher.find()) {
             if (Integer.parseInt(matcher.group(1)) > MAX_JUNIOR_YEARS) {
+                return true;
+            }
+        }
+
+        Matcher wordMatcher = YEARS_EXPERIENCE_WORD_PATTERN.matcher(text);
+        while (wordMatcher.find()) {
+            int years = NUMBER_WORDS.get(wordMatcher.group(1).toLowerCase(Locale.ROOT));
+            if (years > MAX_JUNIOR_YEARS) {
                 return true;
             }
         }

@@ -31,12 +31,14 @@ CREATE INDEX IF NOT EXISTS idx_vacancies_company ON vacancies (company);
 -- safely on every startup, so this stays idempotent like the rest of this file.
 CREATE TABLE IF NOT EXISTS vacancy_extractions (
     vacancy_id INTEGER PRIMARY KEY REFERENCES vacancies(id) ON DELETE CASCADE,
+    summary TEXT,                  -- 2-3 sentence plain-English: what the company does
+                                    -- + what you'd actually do day-to-day
     skills TEXT,                   -- JSON array, e.g. '["Python","SQL"]'
     seniority TEXT,                -- internship | junior | mid | senior | unknown
     salary_min INTEGER,
     salary_max INTEGER,
     salary_currency TEXT,          -- ISO code, e.g. 'USD', 'EUR'
-    salary_period TEXT,            -- hourly | yearly | unknown -- don't compare salary_min/max
+    salary_period TEXT,            -- hourly | monthly | yearly | unknown -- don't compare salary_min/max
                                     -- across rows without checking this first
     language_requirement TEXT,
     remote_policy TEXT,            -- remote | hybrid | onsite | unknown

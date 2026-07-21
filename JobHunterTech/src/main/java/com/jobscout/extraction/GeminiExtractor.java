@@ -92,6 +92,8 @@ public class GeminiExtractor implements Extractor {
 
         ObjectNode properties = MAPPER.createObjectNode();
 
+        properties.set("summary", typedField("STRING", ExtractionPrompt.SUMMARY_DESCRIPTION));
+
         ObjectNode skills = MAPPER.createObjectNode();
         skills.put("type", "ARRAY");
         ObjectNode skillsItems = MAPPER.createObjectNode();
@@ -111,6 +113,7 @@ public class GeminiExtractor implements Extractor {
         schema.set("properties", properties);
 
         ArrayNode required = MAPPER.createArrayNode();
+        required.add("summary");
         required.add("skills");
         required.add("seniority");
         required.add("salary_min");
@@ -165,6 +168,7 @@ public class GeminiExtractor implements Extractor {
         fields.path("skills").forEach(node -> skills.add(node.asText()));
 
         return new VacancyExtraction(
+                nullableString(fields.path("summary")),
                 skills,
                 fields.path("seniority").asText("unknown"),
                 nullableInt(fields.path("salary_min")),

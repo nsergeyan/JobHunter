@@ -52,7 +52,9 @@ public class AshbyScraper extends BaseScraper {
             new AshbyCompany("Cubist", "cubist"),
             new AshbyCompany("Bolt", "bolt"),
             new AshbyCompany("Mollie", "mollie"),
-            new AshbyCompany("ClearBank", "clearbank"));
+            new AshbyCompany("ClearBank", "clearbank"),
+            new AshbyCompany("ElevenLabs", "elevenlabs"),
+            new AshbyCompany("Sierra", "sierra"));
 
     private final List<AshbyCompany> companies;
 

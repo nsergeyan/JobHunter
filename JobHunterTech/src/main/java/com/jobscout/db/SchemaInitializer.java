@@ -41,6 +41,7 @@ public final class SchemaInitializer {
             // has no "ADD COLUMN IF NOT EXISTS", so new columns on existing tables need an
             // explicit, checked migration here instead.
             addColumnIfMissing(conn, "vacancy_extractions", "salary_period", "TEXT");
+            addColumnIfMissing(conn, "vacancy_extractions", "summary", "TEXT");
         } catch (SQLException exc) {
             throw new RuntimeException("Failed to initialize database at " + dbPath, exc);
         }

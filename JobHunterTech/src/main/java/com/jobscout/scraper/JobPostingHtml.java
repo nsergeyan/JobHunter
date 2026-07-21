@@ -1,7 +1,10 @@
 package com.jobscout.scraper;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.nodes.Node;
 import org.jsoup.nodes.TextNode;
 import org.jsoup.select.NodeVisitor;
@@ -9,9 +12,31 @@ import org.jsoup.select.NodeVisitor;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Shared HTML-to-text cleanup for job description fields. */
+/** Shared HTML-to-text cleanup and schema.org JobPosting extraction for job description fields. */
 public final class JobPostingHtml {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private JobPostingHtml() {
+    }
+
+    /** Returns the first `application/ld+json` block whose @type is JobPosting, or null. */
+    public static JsonNode extractJobPosting(String pageHtml) {
+        Document doc = Jsoup.parse(pageHtml);
+        for (Element script : doc.select("script[type=application/ld+json]")) {
+            try {
+                JsonNode node = MAPPER.readTree(script.data());
+                if ("JobPosting".equals(node.path("@type").asText(null))) {
+                    return node;
+                }
+            } catch (Exception ignored) {
+                // Malformed JSON-LD block -- skip it, same as the Python JSONDecodeError guard.
+            }
+        }
+        return null;
+    }
+
+    public static String cleanDescription(JsonNode posting) {
+        return htmlToText(posting.path("description").asText(""));
     }
 
     /**

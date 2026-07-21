@@ -24,10 +24,11 @@ public final class ExtractionRepository {
 
     private static final String UPSERT_SQL = """
             INSERT INTO vacancy_extractions
-                (vacancy_id, skills, seniority, salary_min, salary_max, salary_currency, salary_period,
+                (vacancy_id, summary, skills, seniority, salary_min, salary_max, salary_currency, salary_period,
                  language_requirement, remote_policy, extraction_model, extracted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (vacancy_id) DO UPDATE SET
+                summary = excluded.summary,
                 skills = excluded.skills,
                 seniority = excluded.seniority,
                 salary_min = excluded.salary_min,
@@ -66,16 +67,17 @@ public final class ExtractionRepository {
 
         try (PreparedStatement stmt = conn.prepareStatement(UPSERT_SQL)) {
             stmt.setLong(1, vacancyId);
-            stmt.setString(2, skillsJson);
-            stmt.setString(3, extraction.seniority());
-            setNullableInt(stmt, 4, extraction.salaryMin());
-            setNullableInt(stmt, 5, extraction.salaryMax());
-            stmt.setString(6, extraction.salaryCurrency());
-            stmt.setString(7, extraction.salaryPeriod());
-            stmt.setString(8, extraction.languageRequirement());
-            stmt.setString(9, extraction.remotePolicy());
-            stmt.setString(10, extraction.model());
-            stmt.setString(11, Instant.now().toString());
+            stmt.setString(2, extraction.summary());
+            stmt.setString(3, skillsJson);
+            stmt.setString(4, extraction.seniority());
+            setNullableInt(stmt, 5, extraction.salaryMin());
+            setNullableInt(stmt, 6, extraction.salaryMax());
+            stmt.setString(7, extraction.salaryCurrency());
+            stmt.setString(8, extraction.salaryPeriod());
+            stmt.setString(9, extraction.languageRequirement());
+            stmt.setString(10, extraction.remotePolicy());
+            stmt.setString(11, extraction.model());
+            stmt.setString(12, Instant.now().toString());
             stmt.executeUpdate();
         } catch (SQLException exc) {
             throw new RuntimeException("Failed to save extraction for vacancy " + vacancyId, exc);

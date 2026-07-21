@@ -38,5 +38,13 @@ class SeniorityFilterTest {
         // Explicit junior/intern signal overrides even a high years mention.
         assertFalse(SeniorityFilter.requiresTooMuchExperience(
                 "This internship is for students; some roles convert to 5+ years senior tracks later"));
+
+        // Real Philips "Data Scientist - Agentic AI Engineer" posting -- spells the
+        // number out instead of using a digit, which the digit-only pattern misses.
+        assertTrue(SeniorityFilter.requiresTooMuchExperience(
+                "You have at least three years hands-on experience developing AI/ML systems"));
+        assertTrue(SeniorityFilter.requiresTooMuchExperience("Five years of experience required"));
+
+        assertFalse(SeniorityFilter.requiresTooMuchExperience("Two years of experience is a plus"));
     }
 }

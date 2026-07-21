@@ -80,7 +80,11 @@ public class GreenhouseScraper extends BaseScraper {
             new GreenhouseCompany("GoCardless", "gocardless"),
             new GreenhouseCompany("Form3", "form3"),
             new GreenhouseCompany("Trustpilot", "trustpilot"),
-            new GreenhouseCompany("Wolt", "wolt"));
+            new GreenhouseCompany("Wolt", "wolt"),
+            new GreenhouseCompany("Samsara", "samsara"),
+            new GreenhouseCompany("Klaviyo", "klaviyo"),
+            new GreenhouseCompany("Airtable", "airtable"),
+            new GreenhouseCompany("Toast", "toast"));
 
     private final List<GreenhouseCompany> companies;
 

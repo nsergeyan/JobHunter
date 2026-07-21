@@ -19,8 +19,9 @@ final class ExtractionPrompt {
             posting does not mention it. Use "unknown" for seniority/remote_policy if the
             posting is genuinely ambiguous, and an empty list for skills if none are
             mentioned. If a salary is stated as a rate (e.g. "$60-80/hr"), set
-            salary_period to "hourly"; if it's an annual figure, set it to "yearly"; if
-            no salary is mentioned, set it to "unknown".
+            salary_period to "hourly"; if it's a per-month figure (e.g. "€2,800-6,000/
+            month", common in European postings), set it to "monthly"; if it's an annual
+            figure, set it to "yearly"; if no salary is mentioned, set it to "unknown".
 
             Seniority guidance: check for "internship" FIRST, before anything else --
             if the job title or posting explicitly identifies the role as an
@@ -43,6 +44,21 @@ final class ExtractionPrompt {
             obviously senior to "mid" -- a flat "2 years" requirement is "junior", not
             "mid".
 
+            Summary guidance: write 2-3 plain-English sentences covering (1) what the
+            company does and (2) what the day-to-day responsibilities of this specific
+            role are. Base this only on what the posting actually says -- do not invent
+            details or pad with generic filler about company culture/benefits. Leave it
+            as an empty string only if the posting genuinely contains no descriptive
+            content about the company or role (e.g. it's just a title and a bullet list
+            of requirements).
+
+            Language requirement guidance: postings often state a language requirement
+            in a single line buried inside the requirements/qualifications bullet list
+            (e.g. "Fluent in English", "no need to speak French!", "Business-level
+            Japanese required") rather than in the main description. Read the entire
+            posting, including the requirements section, before deciding this field is
+            not mentioned -- do not stop scanning after the summary/intro paragraphs.
+
             Skills guidance: each entry in "skills" must be a single, atomic
             technology/tool/language/framework name (e.g. "Python", "AWS", "Docker") --
             never bundle multiple technologies into one string and never include
@@ -57,8 +73,13 @@ final class ExtractionPrompt {
 
     static final List<String> SENIORITY_VALUES = List.of("internship", "junior", "mid", "senior", "unknown");
     static final List<String> REMOTE_POLICY_VALUES = List.of("remote", "hybrid", "onsite", "unknown");
-    static final List<String> SALARY_PERIOD_VALUES = List.of("hourly", "yearly", "unknown");
+    static final List<String> SALARY_PERIOD_VALUES = List.of("hourly", "monthly", "yearly", "unknown");
 
+    static final String SUMMARY_DESCRIPTION =
+            "2-3 plain-English sentences: what the company does, and what this role's "
+                    + "day-to-day responsibilities are. Based only on the posting's actual "
+                    + "content, not generic filler. Empty string if the posting has no real "
+                    + "descriptive content.";
     static final String SKILLS_DESCRIPTION =
             "Technical skills, tools, languages, or frameworks explicitly mentioned. "
                     + "One atomic item per entry -- never bundle multiple technologies "
@@ -75,7 +96,7 @@ final class ExtractionPrompt {
     static final String SALARY_MAX_DESCRIPTION = "Maximum stated salary, 0 if not mentioned.";
     static final String SALARY_CURRENCY_DESCRIPTION = "ISO currency code (e.g. USD, EUR), empty if not mentioned.";
     static final String SALARY_PERIOD_DESCRIPTION =
-            "Whether salary_min/salary_max are an hourly rate or an annual figure.";
+            "Whether salary_min/salary_max are an hourly rate, a monthly figure, or an annual figure.";
     static final String LANGUAGE_REQUIREMENT_DESCRIPTION =
             "Required spoken/written language(s), empty if not mentioned.";
     static final String REMOTE_POLICY_DESCRIPTION = "Remote-work policy stated or implied by the posting.";

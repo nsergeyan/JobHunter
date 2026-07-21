@@ -6,6 +6,7 @@ import com.jobscout.scraper.JdkHttpFetcher;
 import com.jobscout.scraper.ashby.AshbyScraper;
 import com.jobscout.scraper.greenhouse.GreenhouseScraper;
 import com.jobscout.scraper.lever.LeverScraper;
+import com.jobscout.scraper.magnetme.MagnetMeScraper;
 import com.jobscout.scraper.smartrecruiters.SmartRecruitersScraper;
 import com.jobscout.scraper.workday.WorkdayScraper;
 import io.github.cdimascio.dotenv.Dotenv;
@@ -51,6 +52,9 @@ public final class Main {
 
             int smartRecruitersCount = new SmartRecruitersScraper(fetcher).run(conn);
             System.out.println("Upserted " + smartRecruitersCount + " vacancies from SmartRecruiters-hosted companies.");
+
+            int magnetMeCount = new MagnetMeScraper(fetcher).run(conn);
+            System.out.println("Upserted " + magnetMeCount + " vacancies from Magnet.me.");
         }
     }
 }
