@@ -1,6 +1,6 @@
 # python/
 
-Build-order steps 3-5 and 7 — see `../PROJECT_BRIEF.md`. LLM extraction (step 2) is
+Build-order steps 3-5 and 7 - see `../PROJECT_BRIEF.md`. LLM extraction (step 2) is
 Java (`../JobHunterTech`); labeling was originally planned as Java too but moved to
 Python on 2026-07-21.
 
@@ -8,26 +8,26 @@ Reads/writes the same SQLite file the Java side uses: `../data/job_scout.db`.
 
 ## Modules
 
-- **`labeling/`** — terminal CLI that shows one vacancy at a time and records a
+- **`labeling/`** - terminal CLI that shows one vacancy at a time and records a
   0/1/2 fit rating per keypress (step 3). `python -m labeling.cli`.
-- **`ranking/`** — feature engineering, logistic regression baseline, and the
+- **`ranking/`** - feature engineering, logistic regression baseline, and the
   three-way benchmark (steps 4-5):
-  - `data.py` — loads labeled vacancies from SQLite.
-  - `filters.py` — hard, rule-based filters applied before ranking (e.g. drops
+  - `data.py` - loads labeled vacancies from SQLite.
+  - `filters.py` - hard, rule-based filters applied before ranking (e.g. drops
     postings requiring a non-English language).
-  - `preferences.py` — the fit preference profile shared by the LLM-judge and
+  - `preferences.py` - the fit preference profile shared by the LLM-judge and
     cosine-similarity baselines.
-  - `baseline.py` — the logistic regression model: feature engineering
+  - `baseline.py` - the logistic regression model: feature engineering
     (multi-hot skills, one-hot seniority/remote policy, TF-IDF title n-grams),
     5-fold cross-validation, and coefficient inspection.
     `python -m ranking.baseline`.
-  - `llm_judge.py` — scores each posting 0-100 against the preference profile
+  - `llm_judge.py` - scores each posting 0-100 against the preference profile
     via a local Ollama call.
-  - `embeddings.py` — cosine similarity between the preference profile and
+  - `embeddings.py` - cosine similarity between the preference profile and
     each posting, via Ollama embeddings.
-  - `benchmark.py` — runs all three and reports precision@k side by side.
+  - `benchmark.py` - runs all three and reports precision@k side by side.
     `python -m ranking.benchmark`.
-- **`analysis/`** — placeholder for step 7 (market analysis notebook).
+- **`analysis/`** - placeholder for step 7 (market analysis notebook).
 
 ## Setup
 
