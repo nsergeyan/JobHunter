@@ -11,7 +11,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-/** Scratch entry point: exercises only the Magnet.me scraper against the real DB. */
+/** Standalone entry point: exercises only the Magnet.me scraper against the real DB. */
 public final class RunMagnetOnly {
     private RunMagnetOnly() {
     }

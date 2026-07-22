@@ -121,7 +121,7 @@ public class AshbyScraper extends BaseScraper {
                 }
 
                 if (!isInTargetRegion(job)) {
-                    System.out.println("Skipping " + company.company() + " \"" + title + "\": outside Europe/US");
+                    System.out.println("Skipping " + company.company() + " \"" + title + "\": outside Europe");
                     continue;
                 }
 

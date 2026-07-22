@@ -8,9 +8,9 @@ Science/AI student (Leiden University). It has two purposes at once:
    idea: a good opportunity worth relocating/traveling for is worth
    surfacing, and applying more broadly is also just good interview
    practice. (Originally scoped Europe + US; narrowed to Europe-only on
-   2026-07-20 once current US immigration policy made most US roles
-   impractical regardless of whether a company nominally offers visa
-   sponsorship — see commit history around that date.)
+   2026-07-20 given how difficult visa sponsorship has become for non-US
+   candidates in US tech roles, regardless of whether a company nominally
+   offers it — see commit history around that date.)
 2. A portfolio project demonstrating the full DS lifecycle: data
    collection, labeling, model training, evaluation, and applied statistics
    — not just LLM orchestration.
@@ -52,12 +52,25 @@ the core data science contribution.
    prompt-vs-prompt.
 3. **Labeling tool.** A simple CLI that shows me a vacancy and records my
    own fit rating (0/1/2) into the database. This produces the training
-   labels — no ML before this exists.
+   labels — no ML before this exists. Built in **Python**, not Java (see
+   Tech constraints below — revised 2026-07-21, overriding the original
+   Java-for-steps-1-3-and-6 split for this one step).
 4. **Ranking model.** Once ~200-300 labels exist, train a model
    (start: LightGBM or logistic regression on engineered features +
-   embeddings) to predict fit.
+   embeddings) to predict fit. Built: a regularized logistic regression
+   baseline over multi-hot skills, one-hot seniority/remote policy, and
+   TF-IDF title n-grams, evaluated with 5-fold cross-validation. LightGBM
+   not yet attempted — logistic regression hasn't been beaten by anything
+   yet, so there's no case for the added complexity per the note below.
 5. **Benchmark.** Compare trained model vs. LLM-as-judge vs. cosine
    similarity on a held-out, time-based test set. Report precision@k.
+   Built: all three scored with precision@k against the full labeled set
+   (the trained model via out-of-fold predictions, so every method is
+   judged on equal footing). Cosine similarity against a hand-written
+   preference profile — no training data, no labels — held up as well as
+   the trained model at k=5 and beat it at k=10/20, a useful data point
+   on how far a well-scoped heuristic gets before labeled data is
+   plentiful.
 6. **Agent loop.** Daily scan -> rank -> draft tailored cover letters for
    top matches -> digest.
 7. **Market analysis.** Once data accumulates over the semester, a
@@ -66,14 +79,20 @@ the core data science contribution.
 
 ## Tech constraints
 - **Language split (revised from the original Python-only plan):** scraping,
-  database, LLM extraction, labeling CLI, and the daily agent loop
-  (build-order steps 1-3, 6) are written in **Java** — a deliberate choice
-  for Java learning experience, not a technical necessity. (Step 2's
-  original wording below mentioned a Pydantic schema, implying Python —
-  resolved 2026-07-20 in favor of keeping extraction in Java alongside the
-  rest of this group, using a hand-built JSON schema instead of Pydantic.)
+  LLM extraction, and the daily agent loop (build-order steps 1-2, 6) are
+  written in **Java** — a deliberate choice for Java learning experience,
+  not a technical necessity. (Step 2's original wording below mentioned a
+  Pydantic schema, implying Python — resolved 2026-07-20 in favor of
+  keeping extraction in Java alongside the rest of this group, using a
+  hand-built JSON schema instead of Pydantic.) The labeling CLI (step 3)
+  was originally planned as Java too but moved to **Python** on
+  2026-07-21 — it's data-collection tooling, not part of the Java-learning
+  goal, and Python was faster to iterate on for a small interactive
+  script (no compile step) while also keeping steps 3-5 in one language
+  during the part of the project Narek cares most about learning deeply.
   The ranking-model work (steps 4-5) stays in **Python**, since
-  scikit-learn/LightGBM have no comparable Java equivalent. Both share one
+  scikit-learn/LightGBM have no comparable Java equivalent. All three
+  (Java scraping/extraction, Python labeling, Python ranking) share one
   SQLite file.
 - macOS, IntelliJ (Java side) / PyCharm (Python side, once that work starts).
 - Database: SQLite to start (simple, works with PyCharm's/IntelliJ's DB viewer).
@@ -96,7 +115,10 @@ job-scout/
 │   │   ├── extraction/    # Extractor interface + Gemini/Ollama implementations, shared prompt
 │   │   └── db/            # schema init + simple upsert functions
 │   └── src/test/java/com/jobscout/
-├── python/                # Python: ranking model + benchmark (added when that work starts)
+├── python/                # Python: labeling CLI, ranking model, benchmark
+│   ├── labeling/
+│   ├── ranking/
+│   └── analysis/          # placeholder for step 7
 └── data/                  # gitignored, local SQLite file lives here
 ```
 

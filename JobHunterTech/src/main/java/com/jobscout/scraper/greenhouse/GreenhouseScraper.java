@@ -149,7 +149,7 @@ public class GreenhouseScraper extends BaseScraper {
 
                 String location = job.path("location").path("name").asText("");
                 if (!TargetRegion.textMentionsTargetRegion(location)) {
-                    System.out.println("Skipping " + company.company() + " \"" + title + "\": outside Europe/US");
+                    System.out.println("Skipping " + company.company() + " \"" + title + "\": outside Europe");
                     continue;
                 }
 

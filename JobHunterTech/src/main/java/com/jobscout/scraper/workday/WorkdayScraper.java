@@ -126,7 +126,7 @@ public class WorkdayScraper extends BaseScraper {
         return new VacancyRecord(sourceName(), url, title, companyName, location, rawText);
     }
 
-    /** Europe + US -- see TargetRegion. Structured country field first, free-text location as fallback. */
+    /** Europe only -- see TargetRegion. Structured country field first, free-text location as fallback. */
     static boolean isInTargetRegion(JsonNode detail) {
         JsonNode info = detail.path("jobPostingInfo");
         String country = info.path("country").path("descriptor").asText("");
@@ -155,7 +155,7 @@ public class WorkdayScraper extends BaseScraper {
                 }
 
                 if (!isInTargetRegion(detail)) {
-                    System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe/US");
+                    System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe");
                     SeenPostingRepository.markSeen(conn, sourceName(), listing.externalPath(), false);
                     continue;
                 }

@@ -11,9 +11,13 @@ in this repo:
 2. LLM extraction into structured fields — done. Java, hand-built JSON
    schema (not Pydantic), two interchangeable providers (Ollama default,
    Gemini alternative) sharing one prompt.
-3. Labeling CLI (0/1/2 fit rating) — no ML work before ~200-300 labels exist
-4. Ranking model (logistic regression baseline first, then LightGBM if it wins)
-5. Benchmark: trained model vs. LLM-as-judge vs. cosine similarity, precision@k
+3. Labeling CLI (0/1/2 fit rating) — done. 201 labels as of 2026-07-22.
+4. Ranking model — done. Logistic regression baseline (multi-hot skills,
+   one-hot seniority/remote policy, TF-IDF title n-grams), 5-fold
+   cross-validated. LightGBM not attempted yet -- only reach for it if it
+   actually beats this baseline on held-out data, not by default.
+5. Benchmark: trained model vs. LLM-as-judge vs. cosine similarity,
+   precision@k — done. See python/ranking/benchmark.py.
 6. Daily agent loop (scan -> rank -> draft cover letters -> digest)
 7. Market analysis notebook
 

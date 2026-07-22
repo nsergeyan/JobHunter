@@ -237,7 +237,7 @@ class WorkdayScraperTest {
     }
 
     @Test
-    void runSkipsPostingsOutsideEuropeAndUS(@TempDir Path tmpDir) throws SQLException {
+    void runSkipsPostingsOutsideEurope(@TempDir Path tmpDir) throws SQLException {
         String detailUrl = "https://testco.wd1.myworkdayjobs.com/wday/cxs/testco/testco/job/A/Software-Engineer-II_R1";
         WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
             if (url.equals(LIST_URL)) {

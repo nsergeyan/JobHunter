@@ -7,9 +7,9 @@ import java.util.Set;
  * Geographic scope shared by every scraper: Europe only.
  *
  * Previously Europe + United States (see git history around 2026-07-20 if that
- * scope is ever worth revisiting) -- narrowed to Europe-only because current US
- * immigration policy makes most US roles practically unattainable regardless of
- * whether a company nominally offers sponsorship. Same target companies (Oracle,
+ * scope is ever worth revisiting) -- narrowed to Europe-only given how difficult
+ * visa sponsorship has become for non-US candidates in US tech roles, regardless
+ * of whether a company nominally offers it. Same target companies (Oracle,
  * Google, etc.) are still in scope -- just their EU-based postings, not US ones.
  */
 public final class TargetRegion {

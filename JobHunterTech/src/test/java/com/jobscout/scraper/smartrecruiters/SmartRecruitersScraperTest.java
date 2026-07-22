@@ -114,7 +114,7 @@ class SmartRecruitersScraperTest {
     }
 
     @Test
-    void runSkipsPostingsOutsideEuropeAndUS(@TempDir Path tmpDir) throws SQLException {
+    void runSkipsPostingsOutsideEurope(@TempDir Path tmpDir) throws SQLException {
         String detailUrl = "https://api.smartrecruiters.com/v1/companies/testco/postings/1";
         String detail = detailJson(
                 "Software Engineer II", "in", "Bangalore, India",

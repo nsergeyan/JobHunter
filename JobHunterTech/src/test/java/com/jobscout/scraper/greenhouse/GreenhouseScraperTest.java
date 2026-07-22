@@ -78,7 +78,7 @@ class GreenhouseScraperTest {
     }
 
     @Test
-    void runSkipsPostingsOutsideEuropeAndUS(@TempDir Path tmpDir) throws SQLException {
+    void runSkipsPostingsOutsideEurope(@TempDir Path tmpDir) throws SQLException {
         String job = jobJson("Data Scientist", "Bangalore, India", "<p>Analyze data.</p>");
         String jobsList = "{\"jobs\":[" + job + "]}";
         GreenhouseScraper scraper = new GreenhouseScraper(fetcherFor(jobsList), List.of(TEST_CO));

@@ -77,7 +77,7 @@ class LeverScraperTest {
     }
 
     @Test
-    void runSkipsPostingsOutsideEuropeAndUS(@TempDir Path tmpDir) throws SQLException {
+    void runSkipsPostingsOutsideEurope(@TempDir Path tmpDir) throws SQLException {
         String job = jobJson("Data Scientist", "IN", "Bangalore, India", "Analyze data at scale.");
         String jobsList = "[" + job + "]";
         LeverScraper scraper = new LeverScraper(fetcherFor(jobsList), List.of(TEST_CO));

@@ -152,7 +152,7 @@ public class SmartRecruitersScraper extends BaseScraper {
                 }
 
                 if (!isInTargetRegion(detail)) {
-                    System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe/US");
+                    System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe");
                     SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), false);
                     continue;
                 }
