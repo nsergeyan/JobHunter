@@ -1,77 +1,130 @@
 # Job-Scout
 
-A personal job-search agent for internship/junior Data Science/AI/ML/software
-engineering roles across Europe, and a portfolio project demonstrating the
-full DS lifecycle - not just LLM orchestration.
+A personalized job-ranking system for internship/junior Data Science, AI/ML, and
+software engineering roles across Europe, built end-to-end: scraping, LLM-based
+structured extraction, manual labeling, a trained ranking model, and a benchmark
+against two untrained baselines.
 
-Most "AI job agent" projects use an LLM to judge fit on every run. Job-Scout instead
-trains a real ranking model on self-labeled fit data and benchmarks it against
-LLM-as-judge and embedding-similarity baselines. See [PROJECT_BRIEF.md](PROJECT_BRIEF.md)
-for the full scope, rationale, and build order.
+Most "AI job agent" projects use an LLM to judge fit on every run and stop there.
+The question this project actually investigates: **given a small set of
+self-labeled examples, does training a model on them outperform simply asking an
+LLM to judge fit, or embedding a stated preference and ranking by similarity?**
+That comparison, not the scraping or the LLM call, is the point.
 
-## Status
+## Pipeline
 
-**Scraper + database:** ~80 companies across 5 ATS platforms (Workday, Greenhouse,
-Lever, Ashby, SmartRecruiters), each verified against the real posting API rather
-than trusted from a guessed slug or the HTML page. Magnet.me/StudentJob.nl (NL-only
-student job boards) were tried first and retired once the scope went global - see
-git history around 2026-07-19. Region scope narrowed from Europe+US back to
-Europe-only around 2026-07-20 (see PROJECT_BRIEF.md for why).
+```
+scrape (Java) -> LLM extraction (Java) -> manual labeling (Python) -> ranking model + benchmark (Python)
+```
 
-**LLM extraction:** two interchangeable providers (Ollama, local/free, default;
-Gemini API, rate-limited free tier) sharing one prompt so results stay comparable
-model-vs-model rather than prompt-vs-prompt.
+- **Scraping**: ~80 companies across 5 ATS platforms (Workday, Greenhouse, Lever,
+  Ashby, SmartRecruiters), each integrated against the platform's real posting API
+  rather than a guessed URL slug or scraped HTML (several platforms return a
+  convincing `200 OK` for a nonexistent company, which a naive slug-guessing
+  approach would silently miss). Scope: internship/junior DS/AI/ML/software roles,
+  Europe only (narrowed from Europe+US given how difficult US visa sponsorship has
+  become for non-US candidates regardless of a company's nominal policy).
+- **Extraction**: each raw posting is parsed into structured fields (skills,
+  seniority, salary, language requirement, remote policy) via an LLM call
+  constrained to a JSON schema, with two interchangeable providers (local Ollama,
+  default; Gemini API) sharing one prompt so results are comparable model-vs-model
+  rather than prompt-vs-prompt.
+- **Labeling**: a terminal CLI records a 0/1/2 fit rating (no/maybe/yes) against
+  personal preference. 201 postings labeled.
+- **Ranking + benchmark**: see Methodology below.
 
-**Labeling:** a terminal CLI (`python/labeling/`) for rating each scraped posting
-0/1/2 (no/maybe/yes) against personal fit. 201 postings labeled as of 2026-07-22.
+## Methodology
 
-**Ranking model + benchmark:** a regularized logistic-regression baseline
-(`python/ranking/`), evaluated with 5-fold cross-validation, compared against an
-LLM-as-judge and a cosine-similarity-to-preference-profile baseline - all three
-scored on precision@k (true positive = a "strong yes" label) against the same 195
-held-out, English-only postings. Run `python -m ranking.benchmark` to reproduce.
+**Problem framing.** This is a small-sample, imbalanced, personalized ranking
+problem: 201 labeled examples, ~15% strong positives, and the goal is a ranked
+shortlist, not a binary classifier. That framing drives every choice below.
+
+**Target variable.** The 0/1/2 label is collapsed to binary for training (`0` vs.
+`{1, 2}`) purely for data efficiency: 201 examples split three ways leaves too few
+`2`s to learn from directly, but `{1, 2}` combined gives a workable 53/47 split.
+The original 0/1/2 label is retained and used as the evaluation bar (`2` only) for
+precision@k, since "is this worth training on" and "is this good enough to surface"
+are different bars, and collapsing them would understate what the shortlist needs
+to deliver.
+
+**Features.** Multi-hot skill indicators (skills seen ≥3 times, to avoid
+one-off noise), one-hot seniority and remote-policy, and TF-IDF over title
+unigrams+bigrams (bigrams specifically to keep phrases like "data scientist" or
+"machine learning" intact instead of splitting them into two unrelated tokens).
+Company name and salary are deliberately excluded: a third of postings share one
+company, so company would partly encode "this specific employer" rather than
+transferable signal, and salary is populated on <5% of postings.
+
+**Model.** L2-regularized logistic regression. Chosen as the baseline specifically
+*because* it's simple: with only 201 rows and 60-100 engineered features, a
+higher-capacity model (LightGBM) would be easy to overfit and hard to justify
+without first establishing whether the simple, interpretable baseline already
+underperforms. It hasn't been beaten by anything yet.
+
+**Validation.** Stratified 5-fold cross-validation, not a single train/test split.
+A single 80/20 split on 201 rows is highly sensitive to which rows land in which
+half; 5-fold rotation averages that variance away and reports it explicitly
+(reported as mean ± std across folds) rather than presenting one run's number as
+ground truth. Each fold's feature vocabulary (skills, TF-IDF terms) is fit on that
+fold's training data only, to avoid leaking test-set vocabulary into training.
+
+**Benchmark baselines.** Two untrained comparisons, run over the same postings:
+- *LLM-as-judge*: the same local model scores each posting 0-100 against a
+  written preference profile. Initially implemented as a discrete 0/1/2 rating
+  matching the label scale, which produced suspiciously flat precision@k across
+  k=5/10/20, diagnosed (not assumed) by inspecting the rating distribution, which
+  showed 39% of postings tied at the top rating with no way to rank within that
+  tie. Switching to a continuous 0-100 score roughly doubled precision@k, with no
+  change to the underlying model or prompt intent.
+- *Cosine similarity*: the same preference profile and every posting, embedded via
+  `nomic-embed-text`, ranked by cosine similarity. No training data, no labels, no
+  LLM reasoning, a pure semantic-similarity floor to compare the trained model
+  against.
+
+**Evaluation metric.** Precision@k, not accuracy or a single-threshold F1. The
+downstream use case is a ranked shortlist a human reviews, so the metric that
+matters is "how good are the top k results," not "what fraction of all 201
+postings did the model classify correctly" (a metric that would be dominated by
+the easy, unambiguous negatives). All three methods are scored against the same
+195 English-only postings (6 postings requiring a non-English language are
+excluded by a hard rule-based filter, not left to any model to infer), and the
+trained model's scores are its **out-of-fold** predictions, so every method is
+judged on postings it never trained on.
+
+## Results
 
 | | precision@5 | precision@10 | precision@20 |
 |---|---|---|---|
 | Logistic regression (out-of-fold) | 0.60 | 0.40 | 0.35 |
-| LLM-as-judge | 0.40 | 0.40 | 0.40 |
+| LLM-as-judge (0-100 score) | 0.40 | 0.40 | 0.40 |
 | Cosine similarity | 0.40 | 0.50 | 0.50 |
 
-Two findings worth calling out:
+**Cosine similarity, no training data at all, matched or beat the trained model
+past the top few results.** With only ~30 strong-positive labels to learn from,
+a well-scoped heuristic is a genuinely competitive baseline, not a strawman. This
+is the project's central empirical finding: training a model on scarce labeled
+data isn't automatically better than a carefully written preference embedding, and
+that's worth knowing *before* investing further in the trained approach rather
+than after.
 
-- With only ~30 "strong yes" labels to train on, plain **cosine similarity** against
-  a hand-written preference paragraph - no training data, no labels, just an
-  embedding model - held up as well as (and past the top few results, better than)
-  the trained model. A useful reminder that a trained ranker isn't automatically
-  better than a well-scoped heuristic once labeled data is scarce.
-- The **LLM-as-judge** result roughly doubled (precision@k from ~0.20 to ~0.40
-  across the board) after a single fix: asking it to score fit 0-100 instead of a
-  discrete 0/1/2. The 3-way scale gave the model only 3 possible answers, so most
-  postings landed in the same bucket and "top-k" beyond that point was decided by
-  arbitrary tie-breaking rather than real judgment - confirmed by checking the rating
-  distribution before assuming the model's judgment itself was bad.
+Logistic regression is sharpest at the very top of the ranking (k=5) and thins out
+faster than cosine similarity as k grows, consistent with training on a coarser
+signal (interested vs. not) than it's being evaluated against (strong yes only),
+and with a small-sample model's confidence being concentrated in its clearest
+cases.
 
 ## Future work
 
-**Daily agent loop (step 6) is intentionally not started yet.** With precision@k
-still in the 0.35-0.60 range on ~30 positive examples, a "top 5" shortlist can
-easily be 2-3 misses - fine for a ranked list a human skims, not reliable enough to
-trust an unattended notifier acting on it. This needs meaningfully more labeled
-data (and likely combining the three scoring methods rather than picking one)
-before it's worth automating.
+**Daily agent loop is intentionally not built yet.** Precision@k in the 0.35-0.60
+range on ~30 positive examples means a top-5 shortlist can plausibly contain 2-3
+misses: acceptable for a ranked list a human skims, not for an unattended
+notifier acting on it. This needs substantially more labeled data, and likely an
+ensemble of the three scoring methods rather than a single one, before it's worth
+automating.
 
-**Market analysis notebook (step 7)** is also on hold until more postings accumulate
-over the semester - the point is analyzing market-wide patterns (skill demand,
-seniority mix), which needs more volume than the current 201 labeled postings to
-say anything reliable.
-
-## Language split
-
-Scraping, database, and LLM extraction (build-order steps 1-2) are written in
-**Java** (a deliberate learning choice, not a technical necessity). The labeling
-CLI, ranking model, and benchmark (steps 3-5) are **Python**, since scikit-learn
-has no comparable Java equivalent and a small interactive CLI iterates faster
-without a compile step. Both share the same SQLite file.
+**Market analysis notebook** (skill demand, seniority mix across the scraped
+companies) is on hold until more postings accumulate: 201 labeled postings isn't
+enough volume to say anything statistically reliable about market-wide patterns.
 
 ## Project structure
 
@@ -89,7 +142,7 @@ JobHunterTech/          # Java: scraper, database, LLM extraction, (later) agent
 python/
 ├── labeling/            # terminal CLI for 0/1/2 fit labeling
 ├── ranking/             # feature engineering, logistic regression baseline, benchmark
-├── analysis/            # placeholder for step 7 (market analysis notebook)
+├── analysis/            # placeholder for the market analysis notebook
 └── tests/
 data/                    # gitignored, local SQLite file lives here
 ```
@@ -135,18 +188,6 @@ python -m ranking.benchmark # compare against LLM-as-judge and cosine similarity
 
 The benchmark's LLM-judge and cosine-similarity steps also need a local Ollama
 embedding model: `ollama pull nomic-embed-text`.
-
-## Build order
-
-1. Scraper + database - done
-2. LLM extraction into structured fields - done
-3. Labeling CLI - done (201 labels)
-4. Ranking model - logistic regression baseline built and cross-validated
-5. Benchmark (trained model vs. LLM-as-judge vs. embedding similarity) - built
-6. Daily agent loop - not started, deliberately (see Future work below)
-7. Market analysis notebook - not started
-
-Each step builds on the previous one's data - see PROJECT_BRIEF.md before skipping ahead.
 
 ## License
 

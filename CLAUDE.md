@@ -1,13 +1,14 @@
 # Job-Scout
 
-See PROJECT_BRIEF.md for full scope, rationale, and build order. Key rules for working
+See README.md for full scope, methodology, and results. Key rules for working
 in this repo:
 
 ## Build order - do not skip ahead
 1. Scraper + database - done. One scraper class per ATS platform (Workday,
    Greenhouse, Lever, Ashby, SmartRecruiters), ~80 companies verified against
    the real posting API. Europe-only scope (narrowed from Europe+US on
-   2026-07-20 - see PROJECT_BRIEF.md for why).
+   2026-07-20, given how difficult US visa sponsorship has become for
+   non-US candidates).
 2. LLM extraction into structured fields - done. Java, hand-built JSON
    schema (not Pydantic), two interchangeable providers (Ollama default,
    Gemini alternative) sharing one prompt.

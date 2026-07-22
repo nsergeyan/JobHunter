@@ -1,8 +1,8 @@
 # python/
 
-Build-order steps 3-5 and 7 - see `../PROJECT_BRIEF.md`. LLM extraction (step 2) is
-Java (`../JobHunterTech`); labeling was originally planned as Java too but moved to
-Python on 2026-07-21.
+Labeling CLI, ranking model, and benchmark - see `../README.md` for the full
+methodology. LLM extraction is Java (`../JobHunterTech`); labeling was originally
+planned as Java too but moved to Python on 2026-07-21.
 
 Reads/writes the same SQLite file the Java side uses: `../data/job_scout.db`.
 
