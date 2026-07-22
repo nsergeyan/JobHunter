@@ -13,6 +13,9 @@ data/
 .idea/
 .claude/
 
+# Claude Code operating instructions -- kept locally, not part of the public repo
+CLAUDE.md
+
 # OS
 .DS_Store
 
