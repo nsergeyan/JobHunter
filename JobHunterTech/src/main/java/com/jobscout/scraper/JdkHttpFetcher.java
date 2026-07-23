@@ -18,20 +18,36 @@ public class JdkHttpFetcher implements HttpFetcher {
     private final String userAgent;
     private final double minDelaySeconds;
     private final double maxDelaySeconds;
+    private final Duration requestTimeout;
 
     public JdkHttpFetcher() {
         this(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
                 env("SCRAPER_USER_AGENT", "job-scout-bot/0.1 (personal project)"),
                 Double.parseDouble(env("SCRAPER_MIN_DELAY_SECONDS", "2")),
-                Double.parseDouble(env("SCRAPER_MAX_DELAY_SECONDS", "5")));
+                Double.parseDouble(env("SCRAPER_MAX_DELAY_SECONDS", "5")),
+                null);
     }
 
     public JdkHttpFetcher(HttpClient client, String userAgent, double minDelaySeconds, double maxDelaySeconds) {
+        this(client, userAgent, minDelaySeconds, maxDelaySeconds, null);
+    }
+
+    /**
+     * requestTimeout bounds a single request's total wall-clock time (unlike
+     * HttpClient's connectTimeout, which only covers the TCP handshake) -- null means
+     * no bound. Added for local Ollama calls: a thinking model constrained by a strict
+     * JSON schema can occasionally wedge the grammar sampler into a state with zero
+     * forward progress (confirmed live: 10+ minutes at 0% CPU, connection still open),
+     * which connectTimeout alone can't catch since the connection itself is fine.
+     */
+    public JdkHttpFetcher(HttpClient client, String userAgent, double minDelaySeconds, double maxDelaySeconds,
+            Duration requestTimeout) {
         this.client = client;
         this.userAgent = userAgent;
         this.minDelaySeconds = minDelaySeconds;
         this.maxDelaySeconds = maxDelaySeconds;
+        this.requestTimeout = requestTimeout;
     }
 
     private static String env(String key, String fallback) {
@@ -48,21 +64,27 @@ public class JdkHttpFetcher implements HttpFetcher {
 
     @Override
     public String get(String url) {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .header("User-Agent", userAgent)
-                .GET()
-                .build();
-        return send(url, request);
+                .GET();
+        applyRequestTimeout(builder);
+        return send(url, builder.build());
     }
 
     @Override
     public String post(String url, String jsonBody) {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .header("User-Agent", userAgent)
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-                .build();
-        return send(url, request);
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody));
+        applyRequestTimeout(builder);
+        return send(url, builder.build());
+    }
+
+    private void applyRequestTimeout(HttpRequest.Builder builder) {
+        if (requestTimeout != null) {
+            builder.timeout(requestTimeout);
+        }
     }
 
     private String send(String url, HttpRequest request) {
