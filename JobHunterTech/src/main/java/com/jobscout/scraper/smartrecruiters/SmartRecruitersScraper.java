@@ -47,7 +47,11 @@ public class SmartRecruitersScraper extends BaseScraper {
             new SmartRecruitersCompany("Wise", "wise"),
             new SmartRecruitersCompany("Bosch", "BoschGroup"),
             new SmartRecruitersCompany("ServiceNow", "servicenow"),
-            new SmartRecruitersCompany("Canva", "canva"));
+            new SmartRecruitersCompany("Canva", "canva"),
+            new SmartRecruitersCompany("Continental", "Continental"),
+            new SmartRecruitersCompany("NielsenIQ", "nielsenIQ"),
+            new SmartRecruitersCompany("Visa", "visa"),
+            new SmartRecruitersCompany("Thales", "Thales"));
 
     private final List<SmartRecruitersCompany> companies;
     private final int pageSize;

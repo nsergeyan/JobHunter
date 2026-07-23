@@ -54,7 +54,19 @@ public class AshbyScraper extends BaseScraper {
             new AshbyCompany("Mollie", "mollie"),
             new AshbyCompany("ClearBank", "clearbank"),
             new AshbyCompany("ElevenLabs", "elevenlabs"),
-            new AshbyCompany("Sierra", "sierra"));
+            new AshbyCompany("Sierra", "sierra"),
+            new AshbyCompany("Cursor", "cursor"),
+            new AshbyCompany("Pennylane", "pennylane"),
+            new AshbyCompany("Vanta", "vanta"),
+            new AshbyCompany("Supabase", "supabase"),
+            new AshbyCompany("Baseten", "baseten"),
+            new AshbyCompany("Temporal", "temporal"),
+            new AshbyCompany("Watershed", "watershed"),
+            new AshbyCompany("Attio", "attio"),
+            new AshbyCompany("Modal", "modal"),
+            new AshbyCompany("Render", "render"),
+            new AshbyCompany("Dust", "dust"),
+            new AshbyCompany("Photoroom", "photoroom"));
 
     private final List<AshbyCompany> companies;
 

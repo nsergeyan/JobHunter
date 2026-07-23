@@ -45,7 +45,14 @@ public class WorkdayScraper extends BaseScraper {
             new WorkdayCompany("Workday", "workday.wd5.myworkdayjobs.com", "workday", "Workday"),
             new WorkdayCompany("Capital One", "capitalone.wd12.myworkdayjobs.com", "capitalone", "Capital_One"),
             new WorkdayCompany("Samsung", "sec.wd3.myworkdayjobs.com", "sec", "Samsung_Careers"),
-            new WorkdayCompany("NVIDIA", "nvidia.wd5.myworkdayjobs.com", "nvidia", "NVIDIAExternalCareerSite"));
+            new WorkdayCompany("NVIDIA", "nvidia.wd5.myworkdayjobs.com", "nvidia", "NVIDIAExternalCareerSite"),
+            new WorkdayCompany("Philips", "philips.wd3.myworkdayjobs.com", "philips", "jobs-and-careers"),
+            new WorkdayCompany("Deutsche Bank", "db.wd3.myworkdayjobs.com", "db", "DBWebsite"),
+            new WorkdayCompany("AstraZeneca", "astrazeneca.wd3.myworkdayjobs.com", "astrazeneca", "Careers"),
+            new WorkdayCompany("Barclays", "barclays.wd3.myworkdayjobs.com", "barclays", "External_Career_Site_Barclays"),
+            new WorkdayCompany("ING", "ing.wd3.myworkdayjobs.com", "ing", "ICSGBLCOR"),
+            new WorkdayCompany("ASML", "asml.wd3.myworkdayjobs.com", "asml", "ASMLEXT1"),
+            new WorkdayCompany("Booking Holdings", "priceline.wd1.myworkdayjobs.com", "priceline", "BookingHoldings"));
 
     private final List<WorkdayCompany> companies;
     private final int pageSize;

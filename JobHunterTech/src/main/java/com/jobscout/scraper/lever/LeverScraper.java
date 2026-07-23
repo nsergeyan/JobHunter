@@ -43,7 +43,15 @@ public class LeverScraper extends BaseScraper {
             new LeverCompany("Aircall", "aircall"),
             new LeverCompany("Qonto", "qonto"),
             new LeverCompany("Malt", "malt"),
-            new LeverCompany("Atlassian", "atlassian"));
+            new LeverCompany("Atlassian", "atlassian"),
+            new LeverCompany("Agicap", "agicap"),
+            new LeverCompany("Contentsquare", "contentsquare"),
+            new LeverCompany("Swile", "swile"),
+            new LeverCompany("Zopa", "zopa"),
+            new LeverCompany("Doctrine", "doctrine"),
+            new LeverCompany("Deliverect", "deliverect"),
+            new LeverCompany("BlaBlaCar", "blablacar"),
+            new LeverCompany("Brevo", "brevo"));
 
     private final List<LeverCompany> companies;
 
