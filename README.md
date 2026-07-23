@@ -17,7 +17,7 @@ That comparison, not the scraping or the LLM call, is the point.
 scrape (Java) -> LLM extraction (Java) -> manual labeling (Python) -> ranking model + benchmark (Python)
 ```
 
-- **Scraping**: ~80 companies across 5 ATS platforms (Workday, Greenhouse, Lever,
+- **Scraping**: ~120 companies across 5 ATS platforms (Workday, Greenhouse, Lever,
   Ashby, SmartRecruiters), each integrated against the platform's real posting API
   rather than a guessed URL slug or scraped HTML (several platforms return a
   convincing `200 OK` for a nonexistent company, which a naive slug-guessing
@@ -28,7 +28,9 @@ scrape (Java) -> LLM extraction (Java) -> manual labeling (Python) -> ranking mo
   seniority, salary, language requirement, remote policy) via an LLM call
   constrained to a JSON schema, with two interchangeable providers (local Ollama,
   default; Gemini API) sharing one prompt so results are comparable model-vs-model
-  rather than prompt-vs-prompt.
+  rather than prompt-vs-prompt. A third mode (`gemini-then-ollama`) runs Gemini as
+  primary and falls back to the local model per-posting on a Gemini error, so a
+  rate limit or transient outage doesn't stall the whole batch.
 - **Labeling**: a terminal CLI records a 0/1/2 fit rating (no/maybe/yes) against
   personal preference. 201 postings labeled.
 - **Ranking + benchmark**: see Methodology below.
@@ -172,7 +174,10 @@ brew install ollama && brew services start ollama && ollama pull qwen3:8b
 
 `./gradlew run` always runs `Main` (the scrapers) - run `ExtractionMain`'s `main()`
 directly from your IDE instead. To use the Gemini API instead of Ollama, set
-`EXTRACTION_PROVIDER=gemini` in `.env` and fill in `GEMINI_API_KEYS`.
+`EXTRACTION_PROVIDER=gemini` in `.env` and fill in `GEMINI_API_KEYS`. To run Gemini
+as primary with an automatic per-posting fallback to Ollama on error, set
+`EXTRACTION_PROVIDER=gemini-then-ollama` instead (needs both Ollama running and
+`GEMINI_API_KEYS` set).
 
 Python side (see [python/README.md](python/README.md) for details):
 
