@@ -1,11 +1,16 @@
 """Logistic regression baseline for ranking vacancies (build-order step 4).
 
 Target: binary, collapsing Narek's 0/1/2 fit labels into 0 = not interested,
-{1, 2} = interested. This is a data-efficiency call -- there are only ~30 `2`
+{1, 2} = interested. This is a data-efficiency call -- there are only ~40 `2`
 labels, too few to train on alone, but plenty of signal in `interested vs not`.
 The original 0/1/2 label is kept alongside so we can evaluate precision@k
 against the stricter "true yes" (label == 2) bar, since that's the bar that
 will matter once this feeds a daily shortlist.
+
+To stop the model treating a "maybe" and a "yes" as identical, training uses
+sample weights (see STRONG_FIT_WEIGHT): label-2 rows count more, so the model
+works harder to float true yeses to the top. A fuller ordinal (0 < 1 < 2)
+model is deferred until there are enough 2s to trust the comparison.
 
 Company name is deliberately excluded as a feature: a third of the labeled set
 is a single company (Bosch), so the model would partly learn "Bosch -> no"
@@ -29,6 +34,20 @@ from ranking.filters import requires_non_english_language
 MIN_SKILL_COUNT = 3
 TITLE_MAX_FEATURES = 150
 N_FOLDS = 5
+
+# The target is binary (interested vs not), so a "maybe" (1) and a "yes" (2)
+# share the same label. This weight tells training to care more about getting
+# the yeses right: each label-2 row counts STRONG_FIT_WEIGHT times as much as a
+# label-0 or label-1 row. It biases the ranking toward true yeses without
+# throwing away the "maybe" signal. Tunable; revisit once there are more 2s.
+STRONG_FIT_WEIGHT = 2.5
+
+
+def sample_weights(y_original: np.ndarray) -> np.ndarray:
+    """1.0 for every row, bumped to STRONG_FIT_WEIGHT for the strong-fit (2s)."""
+    weights = np.ones(len(y_original))
+    weights[y_original == 2] = STRONG_FIT_WEIGHT
+    return weights
 
 
 class FeatureBuilder:
@@ -123,7 +142,7 @@ def cross_validate(df: pd.DataFrame, y_binary: np.ndarray, y_original: np.ndarra
         X_test = builder.transform(df_test)
 
         model = LogisticRegression(max_iter=1000)
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train, sample_weight=sample_weights(y_original[train_idx]))
 
         preds = model.predict(X_test)
         probs = model.predict_proba(X_test)[:, 1]
@@ -185,7 +204,7 @@ def main() -> None:
     builder = FeatureBuilder().fit(df)
     X_all = builder.transform(df)
     model = LogisticRegression(max_iter=1000)
-    model.fit(X_all, y_binary)
+    model.fit(X_all, y_binary, sample_weight=sample_weights(y_original))
 
     coefs = pd.Series(model.coef_[0], index=X_all.columns).sort_values()
     print("\nStrongest negative weights (push toward 'not interested'):")
