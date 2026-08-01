@@ -40,11 +40,10 @@ def main() -> None:
     print(f"Dropped {before - len(df)} postings requiring a non-English language ({len(df)} remain)\n")
 
     y_original = df["label"].to_numpy()
-    y_binary = (df["label"] >= 1).astype(int).to_numpy()
 
     print("Running logistic regression cross-validation for out-of-fold scores...")
-    cv_results = cross_validate(df, y_binary, y_original)
-    lr_scores = cv_results["oof_probs"]
+    cv_results = cross_validate(df, y_original)
+    lr_scores = cv_results["oof_scores"]
 
     print("\nRunning LLM-as-judge (one Ollama call per posting -- this will take a while)...")
     llm_scores = judge_all(df)

@@ -1,7 +1,7 @@
 """LLM-as-judge: asks the same local Ollama model used for extraction to score
-each posting directly against Narek's preference profile, using the same
+each posting directly against the user's preference profile, using the same
 /api/chat + JSON-schema "format" trick as the Java OllamaExtractor. This is
-"instructed judgment" rather than learned from labels -- Narek's 0/1/2 labels
+"instructed judgment" rather than learned from labels -- the 0/1/2 labels
 are never shown to the model, only the fixed preference profile.
 
 Scores 0-100 rather than a discrete 0/1/2: a 3-way rating gave the model only

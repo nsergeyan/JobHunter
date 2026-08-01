@@ -1,7 +1,7 @@
-"""Cosine-similarity scoring: embeds Narek's preference profile once and every
+"""Cosine-similarity scoring: embeds the user's preference profile once and every
 posting's text, then scores each posting by how closely its embedding points in
 the same direction as the profile's. Unlike the logistic regression model or the
-LLM judge, this never looks at Narek's 0/1/2 labels or reasons about the text --
+LLM judge, this never looks at the 0/1/2 labels or reasons about the text --
 it's a fixed, pretrained notion of semantic closeness.
 """
 

@@ -1,6 +1,6 @@
-"""Narek's stated job preferences, as a single source of truth shared by the
+"""The user's stated job preferences, as a single source of truth shared by the
 LLM-as-judge prompt and the cosine-similarity query. Written once from the
-patterns his 0/1/2 labels showed across 201 postings -- not iteratively tuned
+patterns the 0/1/2 labels showed across 201 postings -- not iteratively tuned
 against those labels, since doing so would leak the test set into the prompt.
 """
 

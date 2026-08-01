@@ -17,7 +17,7 @@ That comparison, not the scraping or the LLM call, is the point.
 scrape (Java) -> LLM extraction (Java) -> manual labeling (Python) -> ranking model + benchmark (Python)
 ```
 
-- **Scraping**: ~120 companies across 5 ATS platforms (Workday, Greenhouse, Lever,
+- **Scraping**: ~140 companies across 5 ATS platforms (Workday, Greenhouse, Lever,
   Ashby, SmartRecruiters), each integrated against the platform's real posting API
   rather than a guessed URL slug or scraped HTML (several platforms return a
   convincing `200 OK` for a nonexistent company, which a naive slug-guessing
@@ -38,18 +38,21 @@ scrape (Java) -> LLM extraction (Java) -> manual labeling (Python) -> ranking mo
 ## Methodology
 
 **Problem framing.** This is a small-sample, imbalanced, personalized ranking
-problem: 341 labeled examples, ~13% strong positives, and the goal is a ranked
+problem: 431 labeled examples, ~13% strong positives, and the goal is a ranked
 shortlist, not a binary classifier. That framing drives every choice below.
 
-**Target variable.** The 0/1/2 label is collapsed to binary for training (`0` vs.
-`{1, 2}`) purely for data efficiency: splitting three ways leaves too few
-`2`s to learn from directly, but `{1, 2}` combined gives a workable 56/44 split.
-So the `2`s are not simply lost inside that combined class, training applies a
-`sample_weight` that counts each strong-fit (`2`) row more than a `1`, nudging
-the ranking toward true yeses (see `STRONG_FIT_WEIGHT`). The original 0/1/2 label
-is retained and used as the evaluation bar (`2` only) for precision@k, since "is
-this worth training on" and "is this good enough to surface" are different bars,
-and collapsing them would understate what the shortlist needs to deliver.
+**Target variable.** The 0/1/2 label is treated as an ordinal scale
+(no < maybe < yes) rather than collapsed to binary. A multinomial logistic
+regression predicts `P(no)`, `P(maybe)`, `P(yes)` per posting, and these are
+combined into an *expected rating*, `0·P(no) + 1·P(maybe) + 2·P(yes)`, which is
+the value the ranking sorts on. This keeps the training objective aligned with
+the evaluation bar: precision@k rewards true yeses (label `2`) at the top of the
+list, and an ordinal score can rank a confident yes above a maybe. An earlier
+binary framing (`0` vs. `{1, 2}`, with a per-row `sample_weight` bump for `2`s)
+put yes and maybe in one class and so could not separate them where it matters
+most; switching to the ordinal expected rating lifted out-of-fold precision@5/@10
+from 0.60/0.50 to 0.80/0.70. Class imbalance (~13% strong positives) is handled
+with `class_weight="balanced"` rather than a hand-tuned per-row weight.
 
 **Features.** Multi-hot skill indicators (skills seen ≥3 times, to avoid
 one-off noise), one-hot seniority and remote-policy, and TF-IDF over title
@@ -59,14 +62,14 @@ Company name and salary are deliberately excluded: a third of postings share one
 company, so company would partly encode "this specific employer" rather than
 transferable signal, and salary is populated on <5% of postings.
 
-**Model.** L2-regularized logistic regression. Chosen as the baseline specifically
-*because* it's simple: with only ~320 rows and 60-100 engineered features, a
-higher-capacity model (LightGBM) would be easy to overfit and hard to justify
-without first establishing whether the simple, interpretable baseline already
-underperforms. It hasn't been beaten by anything yet.
+**Model.** L2-regularized multinomial logistic regression (one weight vector per
+class). Chosen as the baseline specifically *because* it's simple: with only ~405
+rows and 60-100 engineered features, a higher-capacity model (LightGBM) would be
+easy to overfit and hard to justify without first establishing whether the
+simple, interpretable baseline already underperforms.
 
 **Validation.** Stratified 5-fold cross-validation, not a single train/test split.
-A single 80/20 split on ~320 rows is highly sensitive to which rows land in which
+A single 80/20 split on ~405 rows is highly sensitive to which rows land in which
 half; 5-fold rotation averages that variance away and reports it explicitly
 (reported as mean ± std across folds) rather than presenting one run's number as
 ground truth. Each fold's feature vocabulary (skills, TF-IDF terms) is fit on that
@@ -87,53 +90,55 @@ fold's training data only, to avoid leaking test-set vocabulary into training.
 
 **Evaluation metric.** Precision@k, not accuracy or a single-threshold F1. The
 downstream use case is a ranked shortlist a human reviews, so the metric that
-matters is "how good are the top k results," not "what fraction of all 341
+matters is "how good are the top k results," not "what fraction of all 431
 postings did the model classify correctly" (a metric that would be dominated by
 the easy, unambiguous negatives). All three methods are scored against the same
-322 English-only postings (19 postings requiring a non-English language are
+405 English-only postings (26 postings requiring a non-English language are
 excluded by a hard rule-based filter, not left to any model to infer), and the
 trained model's scores are its **out-of-fold** predictions, so every method is
 judged on postings it never trained on.
 
 ## Results
 
-> Note: the table below is from the 201-label run. Labeling has since grown to
-> 341 (322 English-only) and training now weights strong-fit rows. The trained
-> model's out-of-fold precision@k on the current set is 0.60 / 0.60 / 0.45; the
-> LLM-judge and cosine rows will be refreshed on the same set on the next full
-> `ranking.benchmark` run before this section's conclusions are updated.
+> Note: the trained-model row is current (431 labels, 405 English-only,
+> out-of-fold, ordinal expected-rating model). The LLM-judge and cosine rows are
+> from the earlier 201-label run and are pending a re-run of `ranking.benchmark`
+> on the current set before a head-to-head conclusion is drawn.
 
 | | precision@5 | precision@10 | precision@20 |
 |---|---|---|---|
-| Logistic regression (out-of-fold) | 0.60 | 0.40 | 0.35 |
-| LLM-as-judge (0-100 score) | 0.40 | 0.40 | 0.40 |
-| Cosine similarity | 0.40 | 0.50 | 0.50 |
+| Logistic regression, ordinal (out-of-fold) | 0.80 | 0.70 | 0.50 |
+| LLM-as-judge (0-100 score) *(201-label run)* | 0.40 | 0.40 | 0.40 |
+| Cosine similarity *(201-label run)* | 0.40 | 0.50 | 0.50 |
 
-**Cosine similarity, no training data at all, matched or beat the trained model
-past the top few results.** With only ~30 strong-positive labels to learn from,
-a well-scoped heuristic is a genuinely competitive baseline, not a strawman. This
-is the project's central empirical finding: training a model on scarce labeled
-data isn't automatically better than a carefully written preference embedding, and
-that's worth knowing *before* investing further in the trained approach rather
-than after.
+**Aligning the training target with the evaluation bar was the single largest
+gain.** Moving from a binary (interested vs. not) target to an ordinal
+expected-rating score lifted out-of-fold precision@5/@10 from 0.60/0.50 to
+0.80/0.70 on the same postings, with no change to features or validation. The
+binary model was optimizing a coarser signal than it was being graded on; scoring
+`0·P(no) + 1·P(maybe) + 2·P(yes)` lets it rank a confident yes above a maybe,
+which is exactly what precision@k measures.
 
-Logistic regression is sharpest at the very top of the ranking (k=5) and thins out
-faster than cosine similarity as k grows, consistent with training on a coarser
-signal (interested vs. not) than it's being evaluated against (strong yes only),
-and with a small-sample model's confidence being concentrated in its clearest
-cases.
+Two caveats. First, with ~55 strong positives spread across 5 folds, each fold
+holds only ~11 yeses, so single-run precision@k still carries meaningful variance;
+the improvement is clear, but the exact figures should be read as approximate.
+Second, on the earlier 201-label set an untrained cosine-similarity baseline
+matched or beat the trained model past the top few results, a reminder that a
+well-scoped heuristic is a competitive floor on scarce data. Whether the ordinal
+model now clears that floor across all k is exactly what the pending benchmark
+re-run will settle.
 
 ## Future work
 
-**Daily agent loop is intentionally not built yet.** Precision@k in the 0.35-0.60
-range on ~30 positive examples means a top-5 shortlist can plausibly contain 2-3
-misses: acceptable for a ranked list a human skims, not for an unattended
-notifier acting on it. This needs substantially more labeled data, and likely an
-ensemble of the three scoring methods rather than a single one, before it's worth
-automating.
+**Daily agent loop is intentionally not built yet.** Even at a top-5 precision of
+0.80, a shortlist can still contain a miss, and with ~55 positive examples the
+per-run variance is real: acceptable for a ranked list a human skims, not yet for
+an unattended notifier acting on it. This needs substantially more labeled data,
+and likely an ensemble of the three scoring methods rather than a single one,
+before it's worth automating.
 
 **Market analysis notebook** (skill demand, seniority mix across the scraped
-companies) is on hold until more postings accumulate: 341 labeled postings isn't
+companies) is on hold until more postings accumulate: 431 labeled postings isn't
 enough volume to say anything statistically reliable about market-wide patterns.
 
 ## Project structure
