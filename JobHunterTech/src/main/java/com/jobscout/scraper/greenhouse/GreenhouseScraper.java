@@ -91,7 +91,16 @@ public class GreenhouseScraper extends BaseScraper {
             new GreenhouseCompany("FreeNow", "freenow"),
             new GreenhouseCompany("Cabify", "cabify"),
             new GreenhouseCompany("Pleo", "pleo"),
-            new GreenhouseCompany("Dashlane", "dashlane"));
+            new GreenhouseCompany("Dashlane", "dashlane"),
+            new GreenhouseCompany("SumUp", "sumup"),
+            new GreenhouseCompany("Bitpanda", "bitpanda"),
+            new GreenhouseCompany("Wayve", "wayve"),
+            new GreenhouseCompany("HelloFresh", "hellofresh"),
+            new GreenhouseCompany("Grafana Labs", "grafanalabs"),
+            new GreenhouseCompany("CoreWeave", "coreweave"),
+            new GreenhouseCompany("Together AI", "togetherai"),
+            new GreenhouseCompany("Postman", "postman"),
+            new GreenhouseCompany("Imbue", "imbue"));
 
     private final List<GreenhouseCompany> companies;
 
