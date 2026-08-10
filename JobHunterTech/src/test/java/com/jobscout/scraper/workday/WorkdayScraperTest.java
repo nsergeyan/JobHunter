@@ -131,6 +131,53 @@ class WorkdayScraperTest {
                 candidates);
     }
 
+    // Real Workday behaviour: only the first page (offset 0) reports a truthful
+    // "total"; every later page returns "total":0 while still serving results. A loop
+    // that trusts the per-page total stops after page 2 and silently drops the rest
+    // (e.g. 40 of NVIDIA's 2000 jobs). Here total=6 with pageSize=2 -> the first page
+    // says 6, pages 2 and 3 lie with 0, and the scraper must still fetch all three.
+    @Test
+    void fetchCandidateJobsKeepsPagingWhenLaterPagesReportZeroTotal() {
+        String pageZeroTotal6 = """
+                {"total":6,"jobPostings":[
+                  {"title":"Software Engineer","externalPath":"/job/A/Software-Engineer_R1"},
+                  {"title":"Data Scientist","externalPath":"/job/B/Data-Scientist_R2"}
+                ]}
+                """;
+        String pageTwoTotal0 = """
+                {"total":0,"jobPostings":[
+                  {"title":"ML Engineer","externalPath":"/job/C/ML-Engineer_R3"},
+                  {"title":"Backend Engineer","externalPath":"/job/D/Backend-Engineer_R4"}
+                ]}
+                """;
+        String pageThreeTotal0 = """
+                {"total":0,"jobPostings":[
+                  {"title":"Backend Developer","externalPath":"/job/E/Backend-Developer_R5"},
+                  {"title":"Full Stack Engineer","externalPath":"/job/F/Full-Stack-Engineer_R6"}
+                ]}
+                """;
+        WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
+            if (!url.equals(LIST_URL)) {
+                throw new AssertionError("Unexpected request: " + url);
+            }
+            if (body.contains("\"offset\":0")) {
+                return pageZeroTotal6;
+            }
+            if (body.contains("\"offset\":2")) {
+                return pageTwoTotal0;
+            }
+            if (body.contains("\"offset\":4")) {
+                return pageThreeTotal0;
+            }
+            throw new AssertionError("Unexpected request body: " + body);
+        }), List.of(TEST_CO), 2);
+
+        List<WorkdayScraper.JobListing> candidates = scraper.fetchCandidateJobs(TEST_CO);
+
+        // All 6 postings across 3 pages, not just the first 2 pages.
+        assertEquals(6, candidates.size());
+    }
+
     @Test
     void isInTargetRegionChecksCountryDescriptorAndLocationString() throws Exception {
         JsonNode germanyByCountry = MAPPER.readTree(

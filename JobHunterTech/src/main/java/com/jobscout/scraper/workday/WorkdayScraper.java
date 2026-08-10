@@ -43,7 +43,6 @@ public class WorkdayScraper extends BaseScraper {
     public static final List<WorkdayCompany> WORKDAY_COMPANIES = List.of(
             new WorkdayCompany("Zendesk", "zendesk.wd1.myworkdayjobs.com", "zendesk", "zendesk"),
             new WorkdayCompany("Workday", "workday.wd5.myworkdayjobs.com", "workday", "Workday"),
-            new WorkdayCompany("Capital One", "capitalone.wd12.myworkdayjobs.com", "capitalone", "Capital_One"),
             new WorkdayCompany("Samsung", "sec.wd3.myworkdayjobs.com", "sec", "Samsung_Careers"),
             new WorkdayCompany("NVIDIA", "nvidia.wd5.myworkdayjobs.com", "nvidia", "NVIDIAExternalCareerSite"),
             new WorkdayCompany("Philips", "philips.wd3.myworkdayjobs.com", "philips", "jobs-and-careers"),
@@ -81,21 +80,28 @@ public class WorkdayScraper extends BaseScraper {
     public List<JobListing> fetchCandidateJobs(WorkdayCompany company) {
         List<JobListing> candidates = new ArrayList<>();
         int offset = 0;
-        int total = Integer.MAX_VALUE;
+        // Workday reports a truthful "total" only on the first page (offset 0); later
+        // pages return 0 while still serving results, so capture it once and use it as
+        // the loop bound. Paging past the end makes Workday wrap back to page 1, so we
+        // stop on the captured total rather than on a short/empty page alone.
+        int total = -1;
 
-        while (offset < total) {
+        while (true) {
             String url = "https://" + company.host() + "/wday/cxs/" + company.tenant() + "/" + company.site() + "/jobs";
             String body = "{\"limit\":%d,\"offset\":%d,\"searchText\":\"\"}".formatted(pageSize, offset);
             JsonNode response = parse(fetcher.post(url, body), url);
 
-            total = response.path("total").asInt(0);
+            if (total < 0) {
+                total = response.path("total").asInt(0);
+            }
+            JsonNode postings = response.path("jobPostings");
+            int returned = postings.isArray() ? postings.size() : 0;
             // This loop can be dozens/hundreds of rate-limited requests for a large
             // company (e.g. 2000 postings / 20 per page = 100 requests) -- without this,
             // the console goes silent for minutes before any per-job logging kicks in.
             System.out.println(company.company() + ": fetched postings " + offset + "-"
-                    + Math.min(offset + pageSize, total) + " of " + total);
-            JsonNode postings = response.path("jobPostings");
-            if (!postings.isArray() || postings.isEmpty()) {
+                    + (offset + returned) + " of " + total);
+            if (returned == 0) {
                 break;
             }
             for (JsonNode posting : postings) {
@@ -106,6 +112,9 @@ public class WorkdayScraper extends BaseScraper {
                 }
             }
             offset += pageSize;
+            if (offset >= total) {
+                break;
+            }
         }
         return candidates;
     }
