@@ -22,7 +22,17 @@ def read_key() -> str:
     pressed. `termios` is used to save/restore the terminal's original settings
     afterward -- without that, the terminal would stay in raw mode after the
     program exits, which breaks normal typing in that terminal window.
+
+    When stdin is not a real terminal (e.g. PyCharm's Run window, where stdin is
+    a pipe), `termios` cannot configure the device, so we fall back to line input:
+    type the key, then press Enter.
     """
+    if not sys.stdin.isatty():
+        line = sys.stdin.readline()
+        if line == "":  # true EOF (stdin closed) returns "" with no newline
+            return "q"  # quit cleanly instead of looping forever on a dead stream
+        return line.strip()[:1]  # first char of the typed line, "" if just Enter
+
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
     try:
