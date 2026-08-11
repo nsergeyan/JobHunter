@@ -131,11 +131,13 @@ public class GreenhouseScraper extends BaseScraper {
     public VacancyRecord toVacancy(GreenhouseCompany company, JsonNode job) {
         String title = job.path("title").asText("");
         String url = job.path("absolute_url").asText(null);
+        // Greenhouse's numeric job id is stable even when absolute_url changes.
+        String externalId = job.path("id").asText(url);
         String location = job.path("location").path("name").asText(null);
         String companyName = job.path("company_name").asText(company.company());
         String rawText = JobPostingHtml.htmlToText(descriptionHtml(job));
 
-        return new VacancyRecord(sourceName(), url, title, companyName, location, rawText);
+        return new VacancyRecord(sourceName(), externalId, url, title, companyName, location, rawText);
     }
 
     private static String descriptionHtml(JsonNode job) {

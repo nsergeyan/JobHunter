@@ -116,12 +116,14 @@ class MagnetMeScraperTest {
             assertEquals(2, count);
 
             try (ResultSet rs = conn.createStatement()
-                    .executeQuery("SELECT title, company, location, raw_text FROM vacancies LIMIT 1")) {
+                    .executeQuery("SELECT title, company, location, raw_text, external_id FROM vacancies LIMIT 1")) {
                 assertTrue(rs.next());
                 assertEquals("Data Engineer Intern", rs.getString("title"));
                 assertEquals("Churned", rs.getString("company"));
                 assertEquals("Amsterdam, NL", rs.getString("location"));
                 assertEquals("Join our \ndata\n team.", rs.getString("raw_text"));
+                // identity is the opportunity id, not the whole url
+                assertEquals("1", rs.getString("external_id"));
             }
         }
     }

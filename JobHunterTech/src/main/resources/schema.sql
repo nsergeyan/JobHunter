@@ -3,7 +3,16 @@
 -- already-seen url updates last_seen (and raw_text, if the posting changed) rather than
 -- inserting a duplicate row.
 --
--- This does NOT dedup the same job posted on multiple sources (e.g. a listing on
+-- Problem this misses: a URL is not a stable job identity. Some platforms hand back a
+-- different url for the same job over time (e.g. Greenhouse's absolute_url can switch
+-- from job-boards.greenhouse.io to the company's own careers domain), so the same job
+-- lands as a second row. external_id below holds the platform's OWN stable posting id
+-- (Greenhouse/Ashby/Lever job id, SmartRecruiters posting id, Workday externalPath, and
+-- for MagnetMe, which has none, the url itself). The scrapers populate it now. The
+-- identity flip to UNIQUE (source, external_id) waits until existing rows are
+-- backfilled and de-duplicated (can't build a unique index while duplicates exist).
+--
+-- This still does NOT dedup the same job posted on multiple sources (e.g. a listing on
 -- Magnet.me that also has its own Greenhouse page) -- that requires fuzzy matching on
 -- title + company + content, which is deferred to a later pass once we have enough
 -- real data to see how often it actually happens.
@@ -11,6 +20,8 @@
 CREATE TABLE IF NOT EXISTS vacancies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source TEXT NOT NULL,          -- e.g. 'magnet', 'indeed_nl', 'greenhouse', 'lever'
+    external_id TEXT,              -- platform's own stable posting id, NULL on legacy rows
+                                    -- until backfilled (see dedup strategy note above)
     url TEXT NOT NULL,
     title TEXT NOT NULL,
     company TEXT,
@@ -24,6 +35,10 @@ CREATE TABLE IF NOT EXISTS vacancies (
 
 CREATE INDEX IF NOT EXISTS idx_vacancies_scraped_at ON vacancies (scraped_at);
 CREATE INDEX IF NOT EXISTS idx_vacancies_company ON vacancies (company);
+
+-- The UNIQUE (source, external_id) index (real job identity) is created in
+-- SchemaInitializer, not here, so it runs AFTER the external_id column migration on
+-- upgraded DBs (this file executes before that migration, when the column may not exist yet).
 
 -- Extracted structured fields per vacancy (LLM extraction, build-order step 2).
 -- Kept as a separate table rather than new columns on vacancies: SQLite has no

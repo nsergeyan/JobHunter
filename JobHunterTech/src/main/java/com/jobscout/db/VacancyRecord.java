@@ -2,6 +2,7 @@ package com.jobscout.db;
 
 public record VacancyRecord(
         String source,
+        String externalId,
         String url,
         String title,
         String company,

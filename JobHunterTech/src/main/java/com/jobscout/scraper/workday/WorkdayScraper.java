@@ -139,7 +139,13 @@ public class WorkdayScraper extends BaseScraper {
             companyName = company.company();
         }
 
-        return new VacancyRecord(sourceName(), url, title, companyName, location, rawText);
+        // externalPath is /job/{location}/{title-slug}_{reqId}. Only the reqId tail is
+        // stable -- the location/title slug changes if the posting is edited -- so key
+        // identity on that, not the whole path.
+        String externalPath = listing.externalPath();
+        int sep = externalPath.lastIndexOf('_');
+        String externalId = sep >= 0 ? externalPath.substring(sep + 1) : externalPath;
+        return new VacancyRecord(sourceName(), externalId, url, title, companyName, location, rawText);
     }
 
     /** Europe only -- see TargetRegion. Structured country field first, free-text location as fallback. */

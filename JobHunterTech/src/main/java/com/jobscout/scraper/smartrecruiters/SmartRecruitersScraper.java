@@ -134,7 +134,7 @@ public class SmartRecruitersScraper extends BaseScraper {
         String location = detail.path("location").path("fullLocation").asText(null);
         String rawText = descriptionText(detail);
 
-        return new VacancyRecord(sourceName(), url, title, company.company(), location, rawText);
+        return new VacancyRecord(sourceName(), listing.id(), url, title, company.company(), location, rawText);
     }
 
     public int run(Connection conn) {

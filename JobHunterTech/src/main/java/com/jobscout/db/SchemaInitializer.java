@@ -42,6 +42,13 @@ public final class SchemaInitializer {
             // explicit, checked migration here instead.
             addColumnIfMissing(conn, "vacancy_extractions", "salary_period", "TEXT");
             addColumnIfMissing(conn, "vacancy_extractions", "summary", "TEXT");
+            addColumnIfMissing(conn, "vacancies", "external_id", "TEXT");
+            // Real job identity. Created here (not in schema.sql) so it runs AFTER the
+            // column migration above -- on an upgraded DB the column doesn't exist while
+            // schema.sql is executing. IF NOT EXISTS makes it a no-op once present.
+            stmt.executeUpdate(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_vacancies_source_external_id "
+                            + "ON vacancies (source, external_id)");
         } catch (SQLException exc) {
             throw new RuntimeException("Failed to initialize database at " + dbPath, exc);
         }

@@ -114,10 +114,13 @@ public class AshbyScraper extends BaseScraper {
     public VacancyRecord toVacancy(AshbyCompany company, JsonNode job) {
         String title = job.path("title").asText("");
         String url = job.path("jobUrl").asText(null);
+        // Ashby returns the posting's stable id; jobUrl already ends in it. Fall back
+        // to the url if a future response shape omits the field.
+        String externalId = job.path("id").asText(url);
         String location = job.path("location").asText(null);
         String rawText = job.path("descriptionPlain").asText("").strip();
 
-        return new VacancyRecord(sourceName(), url, title, company.company(), location, rawText);
+        return new VacancyRecord(sourceName(), externalId, url, title, company.company(), location, rawText);
     }
 
     public int run(Connection conn) {

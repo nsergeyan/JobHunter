@@ -21,6 +21,8 @@ import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Magnet.me scraper -- unlike the ATS platform scrapers, this discovers
@@ -39,6 +41,10 @@ import java.util.NoSuchElementException;
  */
 public class MagnetMeScraper extends BaseScraper {
     private static final String SITEMAP_URL = "https://magnet.me/sitemaps/en-opportunities.xml";
+
+    // The numeric opportunity id in /en/opportunity/{id}/{title-slug} is the stable
+    // identity; the title slug after it can change, so key external_id on the id only.
+    private static final Pattern OPPORTUNITY_ID = Pattern.compile("/opportunity/(\\d+)");
 
     // Specific postings magnet.me's robots.txt calls out as crawled too often --
     // excluded defensively even though they're unlikely to match the filters above.
@@ -80,7 +86,9 @@ public class MagnetMeScraper extends BaseScraper {
         if (titleNode.isMissingNode()) {
             throw new NoSuchElementException("missing 'title'");
         }
-        return new VacancyRecord(sourceName(), url, titleNode.asText(), company, location, rawText);
+        Matcher idMatch = OPPORTUNITY_ID.matcher(url);
+        String externalId = idMatch.find() ? idMatch.group(1) : url;
+        return new VacancyRecord(sourceName(), externalId, url, titleNode.asText(), company, location, rawText);
     }
 
     public int run(Connection conn) {

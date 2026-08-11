@@ -158,10 +158,13 @@ public class LeverScraper extends BaseScraper {
     public VacancyRecord toVacancy(LeverCompany company, JsonNode job) {
         String title = job.path("text").asText("");
         String url = job.path("hostedUrl").asText(null);
+        // Lever returns the posting's stable id; hostedUrl already ends in it. Fall back
+        // to the url if a future response shape omits the field.
+        String externalId = job.path("id").asText(url);
         String location = job.path("categories").path("location").asText(null);
         String rawText = descriptionText(job);
 
-        return new VacancyRecord(sourceName(), url, title, company.company(), location, rawText);
+        return new VacancyRecord(sourceName(), externalId, url, title, company.company(), location, rawText);
     }
 
     public int run(Connection conn) {

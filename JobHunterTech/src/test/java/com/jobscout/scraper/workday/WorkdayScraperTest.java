@@ -213,7 +213,7 @@ class WorkdayScraperTest {
             assertEquals(1, count);
 
             try (ResultSet rs = conn.createStatement()
-                    .executeQuery("SELECT source, title, company, location, raw_text, url FROM vacancies")) {
+                    .executeQuery("SELECT source, title, company, location, raw_text, url, external_id FROM vacancies")) {
                 assertTrue(rs.next());
                 assertEquals("workday", rs.getString("source"));
                 assertEquals("Software Engineer II", rs.getString("title"));
@@ -221,6 +221,8 @@ class WorkdayScraperTest {
                 assertEquals("Krakow, Poland", rs.getString("location"));
                 assertEquals("Build \nthings\n with us.", rs.getString("raw_text"));
                 assertEquals("https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-II_R1", rs.getString("url"));
+                // identity is the stable req id tail, not the whole path
+                assertEquals("R1", rs.getString("external_id"));
             }
         }
     }
