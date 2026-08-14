@@ -5,6 +5,8 @@ postings. precision@k (true positive = original label 2) is the common
 yardstick across all three, so they're judged on equal footing.
 """
 
+import argparse
+
 import numpy as np
 
 from ranking.baseline import cross_validate, precision_at_k
@@ -34,6 +36,14 @@ def report_score_spread(name: str, scores: np.ndarray) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Benchmark the ranking approaches.")
+    parser.add_argument(
+        "--skip-judge",
+        action="store_true",
+        help="skip the slow LLM-as-judge pass (it's unchanged by the semantic-feature experiment)",
+    )
+    args = parser.parse_args()
+
     df = load_labeled_vacancies()
     before = len(df)
     df = df[~df["language_requirement"].apply(requires_non_english_language)].reset_index(drop=True)
@@ -41,22 +51,30 @@ def main() -> None:
 
     y_original = df["label"].to_numpy()
 
-    print("Running logistic regression cross-validation for out-of-fold scores...")
-    cv_results = cross_validate(df, y_original)
-    lr_scores = cv_results["oof_scores"]
-
-    print("\nRunning LLM-as-judge (one Ollama call per posting -- this will take a while)...")
-    llm_scores = judge_all(df)
-    report_score_spread("LLM-judge", llm_scores)
-
-    print("\nEmbedding preference profile and postings for cosine similarity...")
+    # Embed once: the same cosine scores serve BOTH as the untrained cosine
+    # baseline AND as the new semantic feature fed into the trained model.
+    print("Embedding postings (used for both the semantic feature and the cosine baseline)...")
     cosine_scores = embedding_scores(df)
+    df["cosine_score"] = cosine_scores
+
+    print("Cross-validating logistic regression WITHOUT the semantic feature...")
+    lr_base = cross_validate(df.drop(columns=["cosine_score"]), y_original)["oof_scores"]
+    print("Cross-validating logistic regression WITH the semantic feature...")
+    lr_semantic = cross_validate(df, y_original)["oof_scores"]
+
+    llm_scores = None
+    if not args.skip_judge:
+        print("\nRunning LLM-as-judge (one Ollama call per posting -- this will take a while)...")
+        llm_scores = judge_all(df)
+        report_score_spread("LLM-judge", llm_scores)
 
     print("\n" + "=" * 60)
     print(f"BENCHMARK -- precision@k, true positive = original label 2 (n={len(df)})")
     print("=" * 60)
-    report_precision_at_k("Logistic regression (out-of-fold)", lr_scores, y_original)
-    report_precision_at_k("LLM-as-judge", llm_scores.astype(float), y_original)
+    report_precision_at_k("Logistic regression (baseline features)", lr_base, y_original)
+    report_precision_at_k("Logistic regression + semantic feature", lr_semantic, y_original)
+    if llm_scores is not None:
+        report_precision_at_k("LLM-as-judge", llm_scores.astype(float), y_original)
     report_precision_at_k("Cosine similarity", cosine_scores, y_original)
 
 

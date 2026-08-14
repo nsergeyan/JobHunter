@@ -28,6 +28,7 @@ instead of transferable skill/role signal, which would not generalize to unseen
 companies. Salary is excluded too since it is missing on ~95% of rows.
 """
 
+import argparse
 import json
 
 import numpy as np
@@ -38,6 +39,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import classification_report
 
 from ranking.data import load_labeled_vacancies
+from ranking.embeddings import embedding_scores
 from ranking.filters import requires_non_english_language
 
 MIN_SKILL_COUNT = 3
@@ -72,6 +74,11 @@ class FeatureBuilder:
         self.title_vectorizer = TfidfVectorizer(
             max_features=TITLE_MAX_FEATURES, stop_words="english", ngram_range=(1, 2)
         )
+        # Min/max for the optional semantic feature (cosine similarity to the
+        # preference profile), learned on the TRAIN fold only. Stay None unless a
+        # df carrying a "cosine_score" column is seen in fit().
+        self.cosine_min: float | None = None
+        self.cosine_max: float | None = None
 
     @staticmethod
     def _parse_skills(raw: str | None) -> list[str]:
@@ -93,6 +100,13 @@ class FeatureBuilder:
         self.remote_categories = sorted(df["remote_policy"].fillna("unknown").unique())
 
         self.title_vectorizer.fit(df["title"].fillna(""))
+
+        # Optional semantic feature. Learn the [0, 1] scaling on the train fold
+        # only so it sits on the same range as the 0/1 and TF-IDF features and
+        # isn't unfairly shrunk (or inflated) by L2 regularization.
+        if "cosine_score" in df.columns:
+            self.cosine_min = float(df["cosine_score"].min())
+            self.cosine_max = float(df["cosine_score"].max())
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -119,7 +133,22 @@ class FeatureBuilder:
             index=df.index,
         )
 
-        return pd.concat([skill_cols, seniority_cols, remote_cols, title_cols], axis=1)
+        feature_frames = [skill_cols, seniority_cols, remote_cols, title_cols]
+
+        # Semantic feature, only when the caller attached a cosine_score column
+        # (so digest.py and other callers that don't embed keep working). Scale
+        # with the train-fold min/max; clip because a test row can fall outside it.
+        if "cosine_score" in df.columns and self.cosine_min is not None:
+            span = self.cosine_max - self.cosine_min
+            if span > 0:
+                scaled = ((df["cosine_score"] - self.cosine_min) / span).clip(0.0, 1.0)
+            else:
+                scaled = pd.Series(0.5, index=df.index)
+            feature_frames.append(
+                pd.DataFrame({"semantic:cosine_sim": scaled.to_numpy()}, index=df.index)
+            )
+
+        return pd.concat(feature_frames, axis=1)
 
 
 def precision_at_k(ranked_true_labels: np.ndarray, k: int) -> float:
@@ -212,10 +241,22 @@ def run_cross_validation(df: pd.DataFrame, y_original: np.ndarray) -> dict:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Train + cross-validate the ranking baseline.")
+    parser.add_argument(
+        "--semantic",
+        action="store_true",
+        help="add the cosine-similarity-to-preference feature (needs Ollama embeddings; slower)",
+    )
+    args = parser.parse_args()
+
     df = load_labeled_vacancies()
     before = len(df)
     df = df[~df["language_requirement"].apply(requires_non_english_language)].reset_index(drop=True)
     print(f"Dropped {before - len(df)} postings requiring a non-English language ({len(df)} remain)\n")
+
+    if args.semantic:
+        print("Embedding postings for the cosine-similarity feature (one Ollama call each)...")
+        df["cosine_score"] = embedding_scores(df)
 
     y_original = df["label"].to_numpy()
 
