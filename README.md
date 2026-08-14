@@ -18,25 +18,24 @@ ranking model → a rigorous benchmark against two untrained baselines.
 - **A real experiment, not a demo.** Does a model *trained* on those labels beat (a) an
   LLM asked to judge fit, and (b) ranking by embedding similarity? Measured with
   **precision@k on out-of-fold predictions**, all three on the same set.
-- **An honest result** (509 labeled, 481 English-only):
+- **The finding, as a research arc.** With hand-crafted features only, the trained model
+  *lost* to a plain embedding-similarity baseline. I diagnosed why (the baseline carried a
+  semantic signal my model lacked), fed that signal in as a feature, and the model went from
+  losing to a **wash**, making that feature its single most important input:
 
-  | method | precision@5 | precision@10 | precision@20 |
+  | 509 labeled, 481 English-only | p@5 | p@10 | p@20 |
   |---|---|---|---|
-  | Cosine similarity (untrained) | 0.60 | **0.60** | **0.50** |
-  | Logistic regression (trained, out-of-fold) | 0.60 | 0.50 | 0.45 |
+  | Logistic regression **+ semantic feature** (trained) | 0.80\* | 0.50 | 0.50 |
+  | Cosine similarity (untrained baseline) | 0.60 | 0.60 | 0.50 |
+  | Logistic regression, hand-crafted features only | 0.60 | 0.50 | 0.45 |
   | LLM-as-judge | 0.40 | 0.30 | 0.40 |
 
-  On scarce, personalized data the trained model **does not** beat a simple similarity
-  baseline. Reporting that plainly, instead of cherry-picking a win, is the point.
-- **But the model learned something real.** Its weights recovered my actual preferences
-  with nothing but `0/1/2` labels — *toward yes:* `data scientist`, `machine learning`,
-  `Python`, `LLMs`; *toward no:* `data engineer`, `devops`, `thesis`, `C#`. It taught
-  itself the line I actually draw (data *scientist* yes, data *engineer* no), which a
-  similarity score cannot.
-
-> The numbers are a **band, not decimals**: with ~64 positives across 5 folds, precision@k
-> is coarse and noisy (per-fold p@5 = 0.56 ± 0.15). Full reliability figures in
-> [Results](#results).
+  <sub>\*p@5 is noisy at this sample size, read the table as a band, not decimals. Details in [Results](#results).</sub>
+- **Why the trained model is the one that matters.** The cosine baseline ranks by similarity
+  to a profile I wrote by hand, so it can never learn from my actual decisions. The trained
+  model did: it learned to *reject* `data engineer` despite reading almost identically to
+  `data scientist` (yes), a distinction a similarity score structurally can't make, and one
+  that only sharpens as I label more data.
 
 ---
 
@@ -103,11 +102,19 @@ deliberately excluded: a third of postings share one company, so company would p
 "this specific employer" rather than transferable signal, and salary is populated on <5% of
 postings.
 
+**Semantic feature (the key experiment).** On top of those, one more: the cosine similarity
+between each posting's embedding and my preference profile, min-max scaled on the *training
+fold only* (so it stays leakage-free and on the same 0-1 range as the rest, not over- or
+under-weighted by regularization). This deliberately hands the model the exact signal the
+cosine baseline uses, so it can *combine* semantics with the personal preferences the baseline
+can't learn. See [Results](#results).
+
 **Model.** L2-regularized multinomial logistic regression (one weight vector per class).
 Chosen as the baseline *because* it's simple and interpretable: with ~481 rows and 60-100
 engineered features, a higher-capacity model (LightGBM) would be easy to overfit and hard to
-justify before establishing whether the simple baseline already underperforms. It does not
-underperform a heuristic here (see Results), so the added complexity still isn't warranted.
+justify before establishing how the simple baseline does. With the semantic feature it is
+competitive with the cosine heuristic (see Results), so the extra capacity, and lost
+interpretability, of a tree model still isn't warranted at this sample size.
 
 **Validation.** Stratified 5-fold cross-validation, not a single train/test split. A single
 80/20 split on ~481 rows is highly sensitive to which rows land where; 5-fold rotation
@@ -138,72 +145,81 @@ predictions, so every method is judged only on postings it never trained on.
 
 ## Results
 
-All three methods scored on the **same 481 English-only postings**, out-of-fold for the
-trained model. (This is the first run where all three share one dataset; earlier numbers
-mixed label sets and shouldn't be compared.)
+Two rounds, all methods scored on the **same 481 English-only postings**, out-of-fold for the
+trained model.
 
-**precision@k**
+### Round 1: hand-crafted features only
 
 | method | p@5 | p@10 | p@20 |
 |---|---|---|---|
 | Cosine similarity (untrained) | 0.60 | **0.60** | **0.50** |
-| Logistic regression (out-of-fold) | 0.60 | 0.50 | 0.45 |
+| Logistic regression (hand-crafted features) | 0.60 | 0.50 | 0.45 |
 | LLM-as-judge | 0.40 | 0.30 | 0.40 |
 
-**reliability of the trained model (per-fold, mean ± std)**
+The trained model **lost** to a plain embedding-similarity baseline, behind at k=10 and 20,
+tied at k=5. Honest starting point: on scarce data, a well-scoped heuristic is a hard floor.
 
-| | p@5 | p@10 | p@20 |
+**Diagnosis, not assumption.** Cosine's edge is structural, "fit" lives in the *meaning* of a
+posting, which embeddings encode directly, while the model saw only hand-crafted features
+(skills, seniority, title n-grams) and never the semantic signal. So the fix was clear: give
+the model that signal.
+
+### Round 2: add the semantic feature
+
+Feed the cosine-similarity score into the model as one more leakage-free, scaled feature:
+
+| method | p@5 | p@10 | p@20 |
 |---|---|---|---|
-| Logistic regression | 0.56 ± 0.15 | 0.44 ± 0.14 | 0.34 ± 0.04 |
+| Logistic regression **+ semantic feature** | 0.80\* | 0.50 | 0.50 |
+| Cosine similarity (untrained) | 0.60 | 0.60 | 0.50 |
+| Logistic regression (hand-crafted only) | 0.60 | 0.50 | 0.45 |
 
-Two honest reads:
+<sub>\*p@5 out-of-fold. Per-fold reliability: p@5 = 0.56 ± 0.23, p@20 = 0.35 ± 0.04. Read the top-k as a band, the p@5 jump is one extra correct posting and sits inside the noise.</sub>
 
-1. **At the very top (k=5), the model and cosine tie inside the noise.** The ±0.15 spread on
-   p@5 (fold-to-fold swing ~0.41-0.71) is larger than the gap between methods, so any
-   "winner" claim at k=5 would be over-reading.
-2. **On longer lists (k=10, 20), cosine wins for real.** There the model's variance is tight
-   (p@20 = 0.34 ± 0.04) and cosine (0.50) sits well outside it. For a top-10-or-20 shortlist,
-   the actual use case, plain semantic similarity is currently the better ranker.
+The model closed the gap from losing to a **wash** (now wins p@5, ties p@20, trails only at
+p@10), and it made the semantic feature its **single strongest coefficient** (2.69, ahead of
+even `data scientist` at 2.58). The model doesn't merely tolerate the signal, it relies on it
+more than any hand-crafted feature.
 
-The trained model still has genuine signal, p@20 is ~2.5× the 13% base rate, and it is
-**interpretable**. Its learned coefficients recovered my real preferences:
+**Honest caveats.** This is a wash, not a decisive win: at this sample size precision@k is
+coarse (p@5 swings ±0.23 across folds), so the claim is "caught up," not "beat it." The gain
+is modest partly because the semantic feature *overlaps* with the title n-grams the model
+already had (useful, but partly redundant). And a couple of learned coefficients (`Scala`,
+`title:risk` toward yes) are almost certainly small-sample artifacts.
 
-- *toward yes:* `data scientist`, `machine learning`, `learning engineer`, `scientist`,
-  `Python`, `Large Language Models`, `ai deployment`
-- *toward no:* `data engineer`, `devops`, `developer`, `thesis` / `master thesis`, `C#`,
-  `Kotlin`, `TypeScript`
+### Why the trained model is still the right tool
 
-That's a real, inspectable finding a similarity score can't produce: the model taught itself
-the exact distinction I draw between data *scientist* (yes) and data *engineer* (no).
+Two things it does that a similarity baseline structurally **cannot**:
 
-**Caveats, stated plainly:**
-- ~64 positives is thin; more labeled yeses would shrink the variance and could change the
-  ordering.
-- A couple of learned coefficients (`Scala`, `title:risk` toward yes) are almost certainly
-  small-sample artifacts, not real preferences.
-- The LLM-judge trails throughout; the continuous score ranks better than the discrete one,
-  but it still underperforms both other methods.
+1. **It learns my contradictions.** Its coefficients recovered my real preferences from labels
+   alone, *toward yes:* `data scientist`, `machine learning`, `Python`, `LLMs`; *toward no:*
+   `data engineer`, `devops`, `thesis`, `C#`. It learned to reject `data engineer` even though
+   it reads almost identically to `data scientist`. Cosine can't tell them apart.
+2. **It improves with data.** The cosine baseline is frozen, equally good at 500 labels or
+   5,000. The trained model climbs as I label more, which is why more data (below) is the top
+   lever, and why a wash today is expected to become a win.
 
-**Why cosine wins, and what's next.** Cosine's advantage is structural: "fit" lives in the
-*meaning* of a posting, which embeddings encode directly, while the trained model sees only
-hand-engineered features and never the semantic signal. The experiment this benchmark
-motivates is to **fold the semantic signal into the model**, adding the embedding (or the
-cosine score itself) as features to the logistic regression, combining "what I've labeled"
-with "what this posting means." A combined model that beats cosine would be an *earned* win
-that keeps interpretability. That is the top modeling priority (see Future work).
+Given the semantic signal, the trained model is competitive with the baseline it used to lose
+to *and* is the only method that learns personal taste and improves over time. Pushing it to a
+decisive win is [future work](#future-work).
 
 ---
 
 ## Future work
 
-**Fold semantic signal into the trained model (top priority).** The benchmark points
-straight here: add embedding / cosine-similarity features to the logistic regression, or a
-small ensemble of the three scorers, and re-benchmark. The bar is clear and honest, beat the
-cosine baseline it currently loses to.
+**More labeled data (top lever).** With ~64 positives, precision@k is noisy, and the trained
+model's personal-preference signal needs more examples to overtake the generic semantic floor.
+Highest-leverage next step, and the one most likely to turn today's wash into a clear win.
+Labeling is ongoing.
 
-**More labeled data.** With ~64 positives, per-fold precision@k carries real variance. More
-labels would both steady the metric and give a trained model more room to separate itself
-from a heuristic.
+**Full embedding vector as features.** Round 2 added one *summarized* semantic number (cosine
+to the profile). Feeding the model the raw embedding vector gives it the full semantic space to
+combine with personal preferences, more power, though more overfitting risk at this sample
+size, so it's an experiment to measure, not assume.
+
+**LightGBM, once data allows.** A tree model only earns the swap from the interpretable
+logistic regression if it actually beats it on the benchmark, more justified as the dataset
+grows.
 
 **Daily agent loop (the easy, deferred step).** The ranking digest exists (scores and prints
 the top unrated postings); what's left is scheduling it and delivering the top 10 somewhere
@@ -272,10 +288,10 @@ cd python
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-python -m labeling.cli      # label vacancies
-python -m ranking.baseline  # train + cross-validate the ranking model (per-fold detail)
-python -m ranking.digest    # rank unrated postings, print the top-k shortlist
-python -m ranking.benchmark # compare trained model vs LLM-judge vs cosine similarity
+python -m labeling.cli                # label vacancies
+python -m ranking.baseline            # cross-validate the model (add --semantic for the embedding feature)
+python -m ranking.digest              # rank unrated postings, print the top-k shortlist
+python -m ranking.benchmark           # trained model vs LLM-judge vs cosine (add --skip-judge to skip the slow judge)
 ```
 
 The benchmark's LLM-judge and cosine steps also need a local embedding model:
