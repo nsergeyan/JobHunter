@@ -40,3 +40,16 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// `run` (from the application plugin) executes Main, the scrapers. Extraction is a
+// separate entry point that previously had to be launched from the IDE; this gives
+// the Python orchestrator a command it can shell out to. Standard output is wired
+// through so the orchestrator can stream progress during long extraction runs.
+tasks.register('extract', JavaExec) {
+    group = 'application'
+    description = 'Runs LLM extraction over vacancies that have not been extracted yet'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.jobscout.ExtractionMain'
+    standardOutput = System.out
+    errorOutput = System.err
+}

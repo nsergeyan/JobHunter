@@ -1,39 +1,54 @@
-"""Daily digest (build-order step 6, first slice): scan -> rank -> print.
+"""Daily digest (build-order step 6): scan -> rank -> print + save.
 
 This reuses the step-4 ranking model unchanged. It trains the same
 FeatureBuilder + multinomial LogisticRegression on ALL labeled vacancies, then
-predicts the expected rating (0..2, higher = closer to a "yes") on postings the
-model has never trained on, and prints them best-first. The English-only filter
-from ranking.filters runs first, so filtered roles never reach the shortlist.
+predicts the expected rating (0..2, higher = closer to a "yes") on the UNLABELED
+postings -- ones the scraper has added that you have not rated yet, so the model
+has never trained on them -- and prints them best-first.
 
-Two modes:
+The eligible pool is "unlabeled, and scraped recently enough to plausibly still
+be open". Filters then apply, and the difference between the two kinds matters:
 
-  (default)   Rank UNLABELED postings -- the real daily-loop behavior. These are
-              postings the scraper has added that you have not rated yet. With a
-              fully-labeled DB this is empty until the next scrape; the command
-              says so instead of printing nothing.
+  language              A hard constraint. A role requiring fluent Dutch is not
+                        a role you can take, so it is dropped unconditionally.
 
-  --demo      Inspection mode. Rank the LABELED set using cross-validated
-              out-of-fold scores (each row scored by a model that never saw it
-              during training), so you can eyeball ranking quality today without
-              any leakage. This is for looking, not for the daily loop.
+  seniority, location   View preferences, configured in ranking.preferences and
+                        overridable per run. The model still TRAINS on every
+                        labeled posting regardless, and scores each posting
+                        independently, so these narrow what you see without ever
+                        changing the order. Top-k is taken AFTER them, so `-k 10`
+                        with an internship-in-NL view means ten internships in
+                        the Netherlands, not "ten postings, some of which match".
 
-Later slices of step 6 will wire the Java scrape + extract steps in front of
-this, draft cover letters for the top postings, and deliver the digest
-somewhere (file/email). This slice deliberately stops at "print to terminal".
+Labeling doubles as dismissal: the digest only shows unlabeled postings, so
+rating a posting in the labeling CLI drops it from tomorrow's digest, and every
+dismissal grows the training set the ranking runs on.
+
+Later slices will draft cover letters for the top postings. This slice prints to
+the terminal and writes a dated markdown copy, so an hour-long pipeline run
+leaves something behind.
 """
 
 import argparse
+from datetime import date
+from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
-from ranking.baseline import FeatureBuilder, cross_validate, expected_rating
+from ranking.baseline import FeatureBuilder, expected_rating
 from ranking.data import load_labeled_vacancies, load_unlabeled_vacancies
-from ranking.filters import requires_non_english_language
+from ranking.filters import (
+    NETHERLANDS_LOCATION_TERMS,
+    matches_location,
+    matches_seniority,
+    requires_non_english_language,
+)
+from ranking.preferences import LOCATION_INCLUDE, SENIORITY_INCLUDE
 
 DEFAULT_TOP_K = 10
+DEFAULT_DAYS = 14
+DIGEST_DIR = Path(__file__).resolve().parents[2] / "data" / "digests"
 
 
 def _drop_non_english(df: pd.DataFrame) -> pd.DataFrame:
@@ -42,67 +57,166 @@ def _drop_non_english(df: pd.DataFrame) -> pd.DataFrame:
     return df[keep].reset_index(drop=True)
 
 
-def score_unlabeled() -> pd.DataFrame:
-    """Train on all labeled data, score every unlabeled posting, return the
-    postings with a 'score' column sorted best-first. English-only filter is
-    applied to both sets first.
+def _apply_view_filters(
+    df: pd.DataFrame,
+    seniority_include: set[str] | None,
+    location_include: set[str] | None,
+) -> pd.DataFrame:
+    """Narrow what you SEE, never what the model learned. Applied after scoring,
+    which changes nothing about the order (scores are per-posting), but does mean
+    top-k counts k postings that actually match.
+    """
+    if df.empty:
+        return df
+    keep = pd.Series(True, index=df.index)
+    if seniority_include is not None:
+        keep &= df["seniority"].apply(lambda s: matches_seniority(s, seniority_include))
+    if location_include is not None:
+        keep &= df["location"].apply(lambda loc: matches_location(loc, location_include))
+    return df[keep].reset_index(drop=True)
+
+
+def score_unlabeled(
+    since_days: int | None = DEFAULT_DAYS,
+    seniority_include: set[str] | None = SENIORITY_INCLUDE,
+    location_include: set[str] | None = LOCATION_INCLUDE,
+) -> tuple[pd.DataFrame, int]:
+    """Train on all labeled data, score the eligible unlabeled postings, and
+    return them sorted best-first alongside the pool size before the view
+    filters were applied (so the caller can report what the filters cost).
     """
     labeled = _drop_non_english(load_labeled_vacancies())
-    unlabeled = _drop_non_english(load_unlabeled_vacancies())
+    unlabeled = _drop_non_english(load_unlabeled_vacancies(since_days))
+    pool_size = len(unlabeled)
 
     if unlabeled.empty:
-        return unlabeled.assign(score=pd.Series(dtype=float))
+        return unlabeled.assign(score=pd.Series(dtype=float)), pool_size
 
     builder = FeatureBuilder().fit(labeled)
     model = LogisticRegression(max_iter=1000, class_weight="balanced")
     model.fit(builder.transform(labeled), labeled["label"].to_numpy())
 
     scores = expected_rating(model.predict_proba(builder.transform(unlabeled)))
-    return unlabeled.assign(score=scores).sort_values("score", ascending=False).reset_index(drop=True)
+    ranked = unlabeled.assign(score=scores)
+    ranked = _apply_view_filters(ranked, seniority_include, location_include)
+    return ranked.sort_values("score", ascending=False).reset_index(drop=True), pool_size
 
 
-def score_labeled_oof() -> pd.DataFrame:
-    """Demo/inspection ranking: cross-validated out-of-fold expected rating for
-    the labeled set. Each row's score comes from a fold that never trained on
-    it, so the ordering is honest (no leakage) even though every row is labeled.
+def _describe_scope(
+    since_days: int | None,
+    seniority_include: set[str] | None,
+    location_include: set[str] | None,
+) -> str:
+    window = f"scraped in the last {since_days} days" if since_days else "any age"
+    seniority = ",".join(sorted(seniority_include)) if seniority_include else "all seniorities"
+    # The location set is a long token list (country plus cities), so name it
+    # rather than dumping every token into the header.
+    if location_include is None:
+        location = "anywhere"
+    elif location_include == NETHERLANDS_LOCATION_TERMS:
+        location = "Netherlands"
+    else:
+        location = ",".join(sorted(location_include))
+    return f"unlabeled, {window}, seniority: {seniority}, location: {location}"
+
+
+def format_digest(
+    ranked: pd.DataFrame,
+    top_k: int,
+    pool_size: int,
+    since_days: int | None,
+    seniority_include: set[str] | None,
+    location_include: set[str] | None = None,
+) -> str:
+    """Render the digest as markdown. Doubles as the terminal output, so the
+    printed and saved versions can never drift apart.
     """
-    labeled = _drop_non_english(load_labeled_vacancies())
-    oof_scores = cross_validate(labeled, labeled["label"].to_numpy())["oof_scores"]
-    return labeled.assign(score=oof_scores).sort_values("score", ascending=False).reset_index(drop=True)
+    scope = _describe_scope(since_days, seniority_include, location_include)
+    lines = [f"# Job digest {date.today().isoformat()}", "", f"_{scope}_", ""]
 
-
-def print_digest(ranked: pd.DataFrame, top_k: int, show_label: bool) -> None:
     if ranked.empty:
-        print(
-            "No unlabeled postings to rank. Every extracted posting already has "
-            "a label.\nRun the scraper (Java `Main`) + extraction (`ExtractionMain`) "
-            "to add fresh postings,\nor use --demo to inspect ranking on the "
-            "labeled set."
-        )
-        return
+        if pool_size:
+            lines += [
+                f"No postings matched the filters, though {pool_size} unlabeled "
+                "postings are in range.",
+                "",
+                "Widen with `--all-seniority` / `--all-locations`, or edit "
+                "`SENIORITY_INCLUDE` / `LOCATION_INCLUDE` in "
+                "`ranking/preferences.py`.",
+            ]
+        else:
+            lines += [
+                "No unlabeled postings in range.",
+                "",
+                "Run the pipeline (`python -m orchestrator`) to scrape and extract "
+                "fresh postings, or widen the window with `--days 0`.",
+            ]
+        return "\n".join(lines) + "\n"
 
-    print(f"Top {min(top_k, len(ranked))} of {len(ranked)} postings (score = expected rating, 0..2):\n")
+    shown = min(top_k, len(ranked))
+    filtered_note = f" (of {pool_size} before filtering)" if len(ranked) != pool_size else ""
+    lines += [
+        f"**Top {shown} of {len(ranked)} matching postings**{filtered_note}. "
+        "Score is the model's expected rating, 0 (no) to 2 (yes).",
+        "",
+    ]
+
     for rank, (_, row) in enumerate(ranked.head(top_k).iterrows(), start=1):
         location = row.get("location") or "?"
-        label_note = f"  [true label {int(row['label'])}]" if show_label and "label" in row else ""
-        print(f"{rank:2d}. {row['score']:.2f}  {row['title']}  @ {row['company']} ({location}){label_note}")
+        seniority = row.get("seniority") or "unknown"
+        lines.append(f"{rank}. **{row['score']:.2f}**  {row['title']} - {row['company']} ({location}) `{seniority}`")
         url = row.get("url")
         if isinstance(url, str) and url:
-            print(f"      {url}")
-    print()
+            lines.append(f"   {url}")
+
+    lines += ["", "---", "", "Rate these with `python -m labeling.cli` to drop them from the next digest."]
+    return "\n".join(lines) + "\n"
+
+
+def save_digest(markdown: str) -> Path:
+    DIGEST_DIR.mkdir(parents=True, exist_ok=True)
+    path = DIGEST_DIR / f"{date.today().isoformat()}.md"
+    path.write_text(markdown, encoding="utf-8")
+    return path
+
+
+def _parse_seniority(args: argparse.Namespace) -> set[str] | None:
+    if args.all_seniority:
+        return None
+    if args.seniority:
+        return {s.strip().lower() for s in args.seniority.split(",") if s.strip()}
+    return SENIORITY_INCLUDE
+
+
+def _parse_location(args: argparse.Namespace) -> set[str] | None:
+    if args.all_locations:
+        return None
+    if args.location:
+        return {loc.strip().lower() for loc in args.location.split(",") if loc.strip()}
+    return LOCATION_INCLUDE
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Rank postings and print a digest.")
-    parser.add_argument("--demo", action="store_true", help="rank the labeled set (out-of-fold) instead of unlabeled postings")
+    parser = argparse.ArgumentParser(description="Rank unlabeled postings and print a digest.")
     parser.add_argument("-k", "--top-k", type=int, default=DEFAULT_TOP_K, help=f"how many to show (default {DEFAULT_TOP_K})")
+    parser.add_argument("--days", type=int, default=DEFAULT_DAYS, help=f"only postings scraped in the last N days, 0 for no limit (default {DEFAULT_DAYS})")
+    parser.add_argument("--seniority", help="comma-separated seniority levels to show, overriding preferences.py (e.g. internship,junior)")
+    parser.add_argument("--all-seniority", action="store_true", help="show every seniority, ignoring preferences.py")
+    parser.add_argument("--location", help="comma-separated location tokens to show, overriding preferences.py (e.g. berlin,munich)")
+    parser.add_argument("--all-locations", action="store_true", help="show every location, ignoring preferences.py")
+    parser.add_argument("--no-save", action="store_true", help="print only, do not write the markdown copy")
     args = parser.parse_args()
 
-    if args.demo:
-        print("=== DEMO: out-of-fold ranking of the LABELED set (for inspection, not the daily loop) ===\n")
-        print_digest(score_labeled_oof(), args.top_k, show_label=True)
-    else:
-        print_digest(score_unlabeled(), args.top_k, show_label=False)
+    since_days = args.days or None
+    seniority_include = _parse_seniority(args)
+    location_include = _parse_location(args)
+
+    ranked, pool_size = score_unlabeled(since_days, seniority_include, location_include)
+    markdown = format_digest(ranked, args.top_k, pool_size, since_days, seniority_include, location_include)
+    print(markdown)
+
+    if not args.no_save:
+        print(f"Saved to {save_digest(markdown)}")
 
 
 if __name__ == "__main__":

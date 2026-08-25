@@ -13,8 +13,8 @@ ranking model → a rigorous benchmark against two untrained baselines.
 
 ## TL;DR
 
-- **Real, self-collected data.** ~500 live postings scraped from 5 applicant-tracking
-  platforms (not a downloaded dataset), each hand-labeled `0/1/2` for personal fit.
+- **Real, self-collected data.** ~640 live postings scraped from 5 applicant-tracking
+  platforms (not a downloaded dataset), 509 of them hand-labeled `0/1/2` for personal fit.
 - **A real experiment, not a demo.** Does a model *trained* on those labels beat (a) an
   LLM asked to judge fit, and (b) ranking by embedding similarity? Measured with
   **precision@k on out-of-fold predictions**, all three on the same set.
@@ -46,11 +46,12 @@ and evaluation: turning messy real postings into a labeled dataset, engineering 
 picking a target and a metric that match the real use case, and honestly comparing three
 approaches on held-out data.
 
-The **daily agent loop** (scrape nightly → rank → send me the top 10) is *deliberately* the
-last and easiest step. It's glue over pieces that already work, so it carries little risk
-and little insight, which is not where a portfolio should spend its evidence. The ranking
-half already exists (a digest that scores and prints the top *unrated* postings);
-unattended automation is [future work](#future-work). The substance is everything before it.
+The **daily agent loop** (scrape → rank → shortlist) is *deliberately* the last and easiest
+step. It's glue over pieces that already work, so it carries little risk and little insight,
+which is not where a portfolio should spend its evidence. It now runs end to end from one
+command (`python -m orchestrator`), which is where the glue stops being interesting;
+unattended scheduling and cover-letter drafting are [future work](#future-work). The
+substance is everything before it.
 
 ---
 
@@ -75,7 +76,8 @@ scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking
   (`gemini-then-ollama`) falls back to the local model per-posting on a Gemini error, so a
   rate limit doesn't stall the batch.
 - **Labeling.** A terminal CLI records a `0/1/2` fit rating (no/maybe/yes) against personal
-  preference. 509 postings labeled.
+  preference. 509 of the 640 scraped postings labeled so far; labeling is ongoing, and the
+  benchmark below is measured on the 509 that were labeled when it was last run.
 - **Ranking + benchmark.** See [Methodology](#methodology) and [Results](#results).
 
 ---
@@ -221,13 +223,14 @@ size, so it's an experiment to measure, not assume.
 logistic regression if it actually beats it on the benchmark, more justified as the dataset
 grows.
 
-**Daily agent loop (the easy, deferred step).** The ranking digest exists (scores and prints
-the top unrated postings); what's left is scheduling it and delivering the top 10 somewhere
-(file/email/phone). Intentionally last: it's glue, not data science, and low-signal for a
-portfolio.
+**Daily agent loop (the easy, deferred step).** The pipeline now runs end to end from one
+command (`python -m orchestrator`: scrape → extract → rank → digest, writing a dated markdown
+shortlist). What's left is unattended scheduling and delivery beyond a local file, plus
+cover-letter drafting for the top postings. Intentionally last: it's glue, not data science,
+and low-signal for a portfolio.
 
 **Market-analysis notebook** (skill demand, seniority mix across scraped companies) is on
-hold until more postings accumulate; ~500 isn't enough to say anything statistically
+hold until more postings accumulate; ~640 isn't enough to say anything statistically
 reliable about market-wide patterns.
 
 ---
@@ -246,6 +249,7 @@ JobHunterTech/          # Java: scraper, database, LLM extraction, (later) agent
 │   └── ExtractionMain.java   # runs LLM extraction over unextracted vacancies
 └── src/test/java/com/jobscout/
 python/
+├── orchestrator.py      # daily pipeline: scrape -> extract -> rank -> digest
 ├── labeling/            # terminal CLI for 0/1/2 fit labeling
 ├── ranking/             # feature engineering, logistic regression baseline, digest, benchmark
 ├── analysis/            # placeholder for the market-analysis notebook
@@ -292,7 +296,15 @@ python -m labeling.cli                # label vacancies
 python -m ranking.baseline            # cross-validate the model (add --semantic for the embedding feature)
 python -m ranking.digest              # rank unrated postings, print the top-k shortlist
 python -m ranking.benchmark           # trained model vs LLM-judge vs cosine (add --skip-judge to skip the slow judge)
+python -m orchestrator                # the whole pipeline: scrape -> extract -> rank -> digest
 ```
+
+`orchestrator.py` drives the two Java stages through Gradle and then ranks, so
+one command goes from "nothing scraped today" to a shortlist. It continues past a
+failed stage and reports what broke at the end, since the database is idempotent
+and a partial scrape is still useful. Extraction runs at roughly 20 seconds per
+posting on local Ollama, so expect a fresh scrape's extraction to take a while.
+See [python/README.md](python/README.md) for the digest's filtering options.
 
 The benchmark's LLM-judge and cosine steps also need a local embedding model:
 `ollama pull nomic-embed-text`.
