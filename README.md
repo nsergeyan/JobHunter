@@ -58,7 +58,7 @@ substance is everything before it.
 ## Pipeline
 
 ```
-scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking model + benchmark (Python)
+scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking model + benchmark (Python) → daily digest (Python)
 ```
 
 - **Scraping.** ~140 companies across 5 ATS platforms (Workday, Greenhouse, Lever, Ashby,
@@ -79,6 +79,11 @@ scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking
   preference. 509 of the 640 scraped postings labeled so far; labeling is ongoing, and the
   benchmark below is measured on the 509 that were labeled when it was last run.
 - **Ranking + benchmark.** See [Methodology](#methodology) and [Results](#results).
+- **Daily loop.** `python -m orchestrator` runs the whole chain in one command and writes a
+  dated markdown shortlist. The digest ranks only postings not yet labeled, so labeling
+  doubles as dismissal and every dismissal grows the training set. Two view filters
+  (seniority, location) narrow what's displayed without touching the model: it still trains
+  on every labeled posting and scores each independently, so they never reorder the ranking.
 
 ---
 
@@ -223,11 +228,10 @@ size, so it's an experiment to measure, not assume.
 logistic regression if it actually beats it on the benchmark, more justified as the dataset
 grows.
 
-**Daily agent loop (the easy, deferred step).** The pipeline now runs end to end from one
-command (`python -m orchestrator`: scrape → extract → rank → digest, writing a dated markdown
-shortlist). What's left is unattended scheduling and delivery beyond a local file, plus
-cover-letter drafting for the top postings. Intentionally last: it's glue, not data science,
-and low-signal for a portfolio.
+**Finishing the daily loop.** The pipeline itself runs (see [Pipeline](#pipeline)); what's
+left is cover-letter drafting for the top postings, unattended scheduling, and delivery
+beyond a local file. Intentionally last: it's glue, not data science, and low-signal for a
+portfolio.
 
 **Market-analysis notebook** (skill demand, seniority mix across scraped companies) is on
 hold until more postings accumulate; ~640 isn't enough to say anything statistically
