@@ -2,6 +2,7 @@ package com.jobscout.scraper;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Geographic scope shared by every scraper: Europe only.
@@ -22,6 +23,18 @@ public final class TargetRegion {
             "portugal", "romania", "san marino", "serbia", "slovakia", "slovenia", "spain",
             "sweden", "switzerland", "ukraine", "united kingdom", "vatican city");
 
+    // The UK is the one country ATS boards rarely name in full. Greenhouse
+    // locations read "London, England" (Figma) or "London, UK" (Anthropic, Monzo,
+    // GoCardless), so matching only on "united kingdom" silently dropped every one
+    // of them as out of scope -- 112 postings across 16 of the configured boards
+    // when this was found.
+    private static final Set<String> UK_SUBDIVISIONS = Set.of(
+            "england", "scotland", "wales", "northern ireland", "great britain");
+
+    // "uk" has to match as a whole word, not a substring: "Fukuoka" and "Tsukuba"
+    // both contain the letters "uk" and are emphatically not in scope.
+    private static final Pattern UK_ABBREVIATION = Pattern.compile("\\buk\\b");
+
     // ISO 3166-1 alpha-2 codes -- Lever's "country" field uses these (e.g. "GB"),
     // not full names like Workday/Ashby do.
     private static final Set<String> IN_SCOPE_COUNTRY_CODES = Set.of(
@@ -39,7 +52,7 @@ public final class TargetRegion {
             return false;
         }
         String normalized = countryName.toLowerCase(Locale.ROOT).strip();
-        return EUROPEAN_COUNTRIES.contains(normalized);
+        return EUROPEAN_COUNTRIES.contains(normalized) || UK_SUBDIVISIONS.contains(normalized);
     }
 
     /** Match against a structured 2-letter ISO 3166-1 alpha-2 country code, e.g. Lever's "country" field. */
@@ -64,6 +77,11 @@ public final class TargetRegion {
                 return true;
             }
         }
-        return false;
+        for (String subdivision : UK_SUBDIVISIONS) {
+            if (normalized.contains(subdivision)) {
+                return true;
+            }
+        }
+        return UK_ABBREVIATION.matcher(normalized).find();
     }
 }

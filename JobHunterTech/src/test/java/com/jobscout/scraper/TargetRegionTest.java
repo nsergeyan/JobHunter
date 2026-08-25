@@ -40,4 +40,27 @@ class TargetRegionTest {
         assertFalse(TargetRegion.textMentionsTargetRegion("Ontario, CAN"));
         assertFalse(TargetRegion.textMentionsTargetRegion(""));
     }
+
+    @Test
+    void textMentionsTargetRegionMatchesUkPostingsThatNeverNameTheCountry() {
+        // Real location strings from the Greenhouse boards. None of these contain
+        // "united kingdom", so matching on full country names alone dropped them.
+        assertTrue(TargetRegion.textMentionsTargetRegion("London, England"));
+        assertTrue(TargetRegion.textMentionsTargetRegion("London, UK"));
+        assertTrue(TargetRegion.textMentionsTargetRegion("Edinburgh, Scotland"));
+        assertTrue(TargetRegion.textMentionsTargetRegion("Cardiff, Wales"));
+
+        // A multi-office posting is in scope as long as one office is.
+        assertTrue(TargetRegion.textMentionsTargetRegion(
+                "London, UK; Ontario, CAN; Remote-Friendly, United States; San Francisco, CA"));
+    }
+
+    @Test
+    void ukAbbreviationMatchesWholeWordsOnly() {
+        // "uk" as a substring appears inside place names that are not the UK, so
+        // the abbreviation has to match on a word boundary.
+        assertFalse(TargetRegion.textMentionsTargetRegion("Fukuoka, Japan"));
+        assertFalse(TargetRegion.textMentionsTargetRegion("Tsukuba, Japan"));
+        assertFalse(TargetRegion.textMentionsTargetRegion("Bukit Timah, Singapore"));
+    }
 }
