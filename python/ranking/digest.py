@@ -40,9 +40,9 @@ from ranking.baseline import FeatureBuilder, expected_rating
 from ranking.data import load_labeled_vacancies, load_scrape_health, load_unlabeled_vacancies
 from ranking.filters import (
     NETHERLANDS_LOCATION_TERMS,
+    drop_non_english,
     matches_location,
     matches_seniority,
-    requires_non_english_language,
 )
 from ranking.preferences import LOCATION_INCLUDE, SENIORITY_INCLUDE
 
@@ -100,12 +100,6 @@ def mark_new(ranked: pd.DataFrame, boundary: date) -> pd.DataFrame:
     return ranked.assign(is_new=(first_seen.notna() & (first_seen >= boundary_ts)))
 
 
-def _drop_non_english(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply the same hard language filter used in training, before ranking."""
-    keep = ~df["language_requirement"].apply(requires_non_english_language)
-    return df[keep].reset_index(drop=True)
-
-
 def _apply_view_filters(
     df: pd.DataFrame,
     seniority_include: set[str] | None,
@@ -134,8 +128,8 @@ def score_unlabeled(
     return them sorted best-first alongside the pool size before the view
     filters were applied (so the caller can report what the filters cost).
     """
-    labeled = _drop_non_english(load_labeled_vacancies())
-    unlabeled = _drop_non_english(load_unlabeled_vacancies(since_days))
+    labeled = drop_non_english(load_labeled_vacancies())
+    unlabeled = drop_non_english(load_unlabeled_vacancies(since_days))
     pool_size = len(unlabeled)
 
     if unlabeled.empty:

@@ -5,10 +5,14 @@ pinning down: extraction leaves seniority unknown on roughly a quarter of
 postings, so whether those are shown is a real recall decision, not an edge case.
 """
 
+import pandas as pd
 import pytest
 
 from ranking.filters import (
     NETHERLANDS_LOCATION_TERMS,
+    detect_written_language,
+    drop_non_english,
+    is_written_in_non_english,
     matches_location,
     matches_seniority,
     requires_non_english_language,
@@ -97,3 +101,98 @@ def test_matches_location_accepts_custom_terms():
 )
 def test_requires_non_english_language(requirement, expected):
     assert requires_non_english_language(requirement) is expected
+
+
+class TestWrittenLanguage:
+    """The gap this closes: a posting written entirely in German that never says so.
+    The stated-requirement check cannot see it, because the requirement is so obvious
+    to whoever wrote the posting that it goes unwritten.
+    """
+
+    GERMAN = (
+        "Du möchtest die Zukunft der nachhaltigen Technologie aktiv mitgestalten und "
+        "Projekte mit uns umsetzen? Bei uns arbeitest du in einem Team, das dich "
+        "unterstützt und fördert. Wir bieten dir die Chance, dein Wissen einzubringen "
+        "und dich weiterzuentwickeln. Deine Aufgaben sind vielfältig und du wirst "
+        "durch erfahrene Kollegen begleitet, sodass du schnell Verantwortung "
+        "übernehmen kannst."
+    )
+    DUTCH = (
+        "Bij Royal Agrifirm Group krijg je als Junior Data Engineer de kans om mee te "
+        "bouwen aan onze data-oplossingen. Je werkt samen met andere collega's binnen "
+        "een team dat elke dag beter wil worden. Wat wij vragen is ervaring met data "
+        "en de wil om te leren. Je krijgt veel ruimte om zelf keuzes te maken en "
+        "onder begeleiding door te groeien in het vak."
+    )
+    ENGLISH = (
+        "We are looking for a Machine Learning Engineer to join our platform team. "
+        "You will build and deploy models that serve millions of users per day, "
+        "working closely with product and data engineering. Experience with Python "
+        "and PyTorch is required, and you will be expected to own features end to "
+        "end from prototype through to production and ongoing measurement."
+    )
+
+    def test_flags_a_posting_written_in_german(self):
+        assert is_written_in_non_english(self.GERMAN) is True
+        assert detect_written_language(self.GERMAN)[0] == "german"
+
+    def test_flags_a_posting_written_in_dutch(self):
+        assert is_written_in_non_english(self.DUTCH) is True
+        assert detect_written_language(self.DUTCH)[0] == "dutch"
+
+    def test_keeps_an_ordinary_english_posting(self):
+        assert is_written_in_non_english(self.ENGLISH) is False
+
+    def test_english_phrases_that_look_foreign_do_not_trigger(self):
+        # "per year" and "e.g." were the original false-positive source: they
+        # tokenise to "per" and "e", which are Italian function words.
+        text = (
+            "The salary is reviewed per year and reported per quarter, e.g. per team "
+            "and per region, with figures shared per department each month. "
+        ) * 4
+        assert is_written_in_non_english(text) is False
+
+    def test_short_text_is_never_guessed_at(self):
+        # A handful of tokens can hit any ratio by accident.
+        assert is_written_in_non_english("und mit für") is False
+        assert detect_written_language("und mit für") == (None, 0.0)
+
+    @pytest.mark.parametrize("value", [None, "", 12345])
+    def test_missing_text_is_handled(self, value):
+        assert is_written_in_non_english(value) is False
+
+    def test_bilingual_postings_are_kept(self):
+        """A posting carrying both versions should stay, since there is an English
+        version you can actually read.
+
+        The real case this models is a Deutsche Bank listing beginning "*English
+        version below*", which scores 9.0% against a 10% threshold. That is a narrow
+        margin and worth stating plainly: a bilingual posting whose English section
+        is much shorter than its German one WILL be dropped. Erring that way is
+        deliberate, since the alternative is letting genuinely German postings
+        through, but it is the known cost of a single global threshold.
+        """
+        mixed = self.GERMAN + " " + self.ENGLISH * 3
+        assert is_written_in_non_english(mixed) is False
+
+
+class TestDropNonEnglish:
+    def test_applies_both_checks(self):
+        df = pd.DataFrame({
+            "language_requirement": [None, "Dutch", None],
+            "raw_text": [
+                TestWrittenLanguage.ENGLISH,   # kept
+                TestWrittenLanguage.ENGLISH,   # dropped: states a Dutch requirement
+                TestWrittenLanguage.GERMAN,    # dropped: written in German
+            ],
+        })
+        assert len(drop_non_english(df)) == 1
+
+    def test_works_without_a_raw_text_column(self):
+        # Some callers load only feature columns, and must not blow up.
+        df = pd.DataFrame({"language_requirement": [None, "German"]})
+        assert len(drop_non_english(df)) == 1
+
+    def test_empty_frame_is_returned_unchanged(self):
+        df = pd.DataFrame(columns=["language_requirement", "raw_text"])
+        assert drop_non_english(df).empty

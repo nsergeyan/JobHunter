@@ -24,7 +24,7 @@ from sklearn.linear_model import LogisticRegression
 
 from ranking.baseline import FeatureBuilder
 from ranking.data import load_labeled_vacancies, load_unlabeled_vacancies
-from ranking.filters import requires_non_english_language
+from ranking.filters import drop_non_english
 
 # Below this, the model is too poorly informed for its confusion to mean anything,
 # so its ordering would be little better than noise dressed up as strategy.
@@ -48,7 +48,7 @@ def uncertainty_by_vacancy_id() -> dict[int, float]:
     which callers should read as "fall back to random order".
     """
     labeled = load_labeled_vacancies()
-    labeled = labeled[~labeled["language_requirement"].apply(requires_non_english_language)]
+    labeled = drop_non_english(labeled)
     if len(labeled) < MIN_LABELS_TO_RANK or labeled["label"].nunique() < 3:
         return {}
 
