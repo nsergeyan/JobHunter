@@ -11,7 +11,7 @@ DB_PATH = Path(__file__).resolve().parents[2] / "data" / "job_scout.db"
 LOAD_LABELED_SQL = """
 SELECT v.id AS vacancy_id, v.title, v.company, v.raw_text,
        e.skills, e.seniority, e.remote_policy, e.language_requirement,
-       l.label
+       l.label, l.labeled_at
 FROM labels l
 JOIN vacancies v ON v.id = l.vacancy_id
 JOIN vacancy_extractions e ON e.vacancy_id = l.vacancy_id

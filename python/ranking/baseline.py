@@ -297,6 +297,76 @@ def cross_validate(
     }
 
 
+TIME_SPLIT_TRAIN_FRACTION = 0.8
+
+
+def time_split_evaluation(
+    df: pd.DataFrame,
+    use_description: bool = False,
+    train_fraction: float = TIME_SPLIT_TRAIN_FRACTION,
+) -> dict:
+    """Train on the labels made first, test on the ones made later.
+
+    Cross-validation shuffles labels together and assumes they are interchangeable.
+    They are not, quite: they arrive over time, the postings on offer shift with the
+    hiring season, and taste drifts with them. A random fold can train on a label
+    made in August and test on one from July, which is information the model would
+    not have had.
+
+    Splitting on labeled_at removes that. It is the closest thing here to the
+    question the digest actually asks -- given everything rated so far, how well
+    does the ranking hold up on postings not yet rated -- and it is the number to
+    watch if precision@k ever looks strong in cross-validation but disappointing in
+    daily use.
+
+    One honest caveat. labeled_at is when the posting was RATED, not when it
+    appeared, and labels have so far been collected in random order. That makes this
+    split close to a random one today, so it mostly serves as a baseline to compare
+    against later. It gets sharper once uncertainty sampling changes what gets rated
+    when (see ranking.active).
+    """
+    if "labeled_at" not in df.columns:
+        raise ValueError("time_split_evaluation needs a labeled_at column -- load via load_labeled_vacancies")
+
+    ordered = df.sort_values("labeled_at", kind="stable").reset_index(drop=True)
+    cut = int(len(ordered) * train_fraction)
+    train, test = ordered.iloc[:cut], ordered.iloc[cut:]
+
+    y_train = train["label"].to_numpy()
+    y_test = test["label"].to_numpy()
+    if len(test) == 0 or len(np.unique(y_train)) < len(LABEL_NAMES):
+        return {}
+
+    builder = FeatureBuilder(use_description=use_description).fit(train)
+    model = LogisticRegression(max_iter=1000, class_weight="balanced")
+    model.fit(builder.transform(train), y_train)
+
+    scores = expected_rating(model.predict_proba(builder.transform(test)))
+    ranked_true = y_test[np.argsort(-scores, kind="stable")]
+
+    return {
+        "n_train": len(train),
+        "n_test": len(test),
+        "n_positives_in_test": int(np.sum(y_test == 2)),
+        "cutoff": str(ordered.loc[cut, "labeled_at"])[:10],
+        "precision": {k: precision_at_k(ranked_true, k) for k in (5, 10, 20) if k <= len(ranked_true)},
+        "ndcg": {k: ndcg_at_k(ranked_true, k) for k in (5, 10, 20) if k <= len(ranked_true)},
+    }
+
+
+def report_time_split(results: dict) -> None:
+    if not results:
+        print("\nToo few labels, or too few classes among the earliest ones, for a time split.")
+        return
+    print(f"\n=== Time-based split: trained on the first {results['n_train']} labels, "
+          f"tested on the {results['n_test']} rated after {results['cutoff']} ===")
+    print(f"({results['n_positives_in_test']} of the held-out postings were a 'yes')")
+    for k, score in results["precision"].items():
+        print(f"  precision@{k}: {score:.2f}")
+    for k, score in results["ndcg"].items():
+        print(f"  ndcg@{k}:      {score:.2f}")
+
+
 def repeated_cross_validate(
     df: pd.DataFrame,
     y_original: np.ndarray,
@@ -387,6 +457,11 @@ def main() -> None:
         help="add TF-IDF features over the posting description (raw_text), not just the title",
     )
     parser.add_argument(
+        "--time-split",
+        action="store_true",
+        help="also evaluate by training on the earliest labels and testing on the most recent",
+    )
+    parser.add_argument(
         "--compare",
         action="store_true",
         help="repeat CV across seeds with and without --description, to see whether it actually helps",
@@ -415,6 +490,9 @@ def main() -> None:
     else:
         label = "+ description TF-IDF" if args.description else "baseline features"
         report_repeated(label, repeated_cross_validate(df, y_original, use_description=args.description))
+
+    if args.time_split:
+        report_time_split(time_split_evaluation(df, use_description=args.description))
 
     print("\n=== Coefficients from a final model trained on ALL labeled data ===")
     print("(not evaluated -- this model has seen everything, it's here to inspect what it learned)")
