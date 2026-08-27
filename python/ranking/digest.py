@@ -30,7 +30,7 @@ leaves something behind.
 """
 
 import argparse
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -49,6 +49,55 @@ from ranking.preferences import LOCATION_INCLUDE, SENIORITY_INCLUDE
 DEFAULT_TOP_K = 10
 DEFAULT_DAYS = 14
 DIGEST_DIR = Path(__file__).resolve().parents[2] / "data" / "digests"
+
+# How far back the NEW marker reaches on a first run, when there is no previous
+# digest to measure against. Without it the very first digest would shout NEW at
+# every posting in the database, which is noise, not news.
+NEW_FALLBACK_DAYS = 7
+
+
+def previous_digest_date() -> date | None:
+    """Date of the most recent saved digest strictly before today, or None.
+
+    Reading it off the saved files is what makes "new since last digest" mean
+    what it says even when you skip a few days: miss a week, and the next digest
+    marks the whole week's arrivals as new rather than only yesterday's. Today's
+    own file is excluded so re-running the digest twice in one day does not
+    silently reset the marker to "nothing is new".
+    """
+    if not DIGEST_DIR.exists():
+        return None
+    today = date.today()
+    dates = []
+    for path in DIGEST_DIR.glob("*.md"):
+        try:
+            parsed = date.fromisoformat(path.stem)
+        except ValueError:
+            continue  # not a dated digest, e.g. a hand-written note
+        if parsed < today:
+            dates.append(parsed)
+    return max(dates, default=None)
+
+
+def new_since_boundary() -> date:
+    """The cutoff the NEW marker uses: last digest's date, else a short fallback."""
+    return previous_digest_date() or date.today() - timedelta(days=NEW_FALLBACK_DAYS)
+
+
+def mark_new(ranked: pd.DataFrame, boundary: date) -> pd.DataFrame:
+    """Add an is_new column: first seen on the board at or after `boundary`.
+
+    first_seen is written once by the scraper and never refreshed, unlike
+    scraped_at, so it is the only column that can answer "is this posting new to
+    me". Rows with a missing or unparseable first_seen are treated as NOT new --
+    conservative on purpose, since a missed NEW badge is cheaper than shouting
+    about a posting from two months ago.
+    """
+    if ranked.empty or "first_seen" not in ranked.columns:
+        return ranked.assign(is_new=pd.Series(dtype=bool))
+    first_seen = pd.to_datetime(ranked["first_seen"], utc=True, errors="coerce")
+    boundary_ts = pd.Timestamp(boundary, tz="UTC")
+    return ranked.assign(is_new=(first_seen.notna() & (first_seen >= boundary_ts)))
 
 
 def _drop_non_english(df: pd.DataFrame) -> pd.DataFrame:
@@ -107,7 +156,9 @@ def _describe_scope(
     seniority_include: set[str] | None,
     location_include: set[str] | None,
 ) -> str:
-    window = f"scraped in the last {since_days} days" if since_days else "any age"
+    window = (
+        f"still listed as of a scrape in the last {since_days} days" if since_days else "any age"
+    )
     seniority = ",".join(sorted(seniority_include)) if seniority_include else "all seniorities"
     # The location set is a long token list (country plus cities), so name it
     # rather than dumping every token into the header.
@@ -127,6 +178,7 @@ def format_digest(
     since_days: int | None,
     seniority_include: set[str] | None,
     location_include: set[str] | None = None,
+    boundary: date | None = None,
 ) -> str:
     """Render the digest as markdown. Doubles as the terminal output, so the
     printed and saved versions can never drift apart.
@@ -140,9 +192,9 @@ def format_digest(
                 f"No postings matched the filters, though {pool_size} unlabeled "
                 "postings are in range.",
                 "",
-                "Widen with `--all-seniority` / `--all-locations`, or edit "
-                "`SENIORITY_INCLUDE` / `LOCATION_INCLUDE` in "
-                "`ranking/preferences.py`.",
+                "Widen with `--all-seniority` / `--all-locations` (or drop "
+                "`--new-only`), or edit `SENIORITY_INCLUDE` / `LOCATION_INCLUDE` "
+                "in `ranking/preferences.py`.",
             ]
         else:
             lines += [
@@ -155,8 +207,11 @@ def format_digest(
 
     shown = min(top_k, len(ranked))
     filtered_note = f" (of {pool_size} before filtering)" if len(ranked) != pool_size else ""
+    new_note = ""
+    if boundary is not None and "is_new" in ranked.columns:
+        new_note = f", {int(ranked['is_new'].sum())} new since {boundary.isoformat()}"
     lines += [
-        f"**Top {shown} of {len(ranked)} matching postings**{filtered_note}. "
+        f"**Top {shown} of {len(ranked)} matching postings**{filtered_note}{new_note}.",
         "Score is the model's expected rating, 0 (no) to 2 (yes).",
         "",
     ]
@@ -164,7 +219,11 @@ def format_digest(
     for rank, (_, row) in enumerate(ranked.head(top_k).iterrows(), start=1):
         location = row.get("location") or "?"
         seniority = row.get("seniority") or "unknown"
-        lines.append(f"{rank}. **{row['score']:.2f}**  {row['title']} - {row['company']} ({location}) `{seniority}`")
+        marker = " **NEW**" if row.get("is_new", False) else ""
+        lines.append(
+            f"{rank}. **{row['score']:.2f}**{marker}  "
+            f"{row['title']} - {row['company']} ({location}) `{seniority}`"
+        )
         url = row.get("url")
         if isinstance(url, str) and url:
             lines.append(f"   {url}")
@@ -178,6 +237,29 @@ def save_digest(markdown: str) -> Path:
     path = DIGEST_DIR / f"{date.today().isoformat()}.md"
     path.write_text(markdown, encoding="utf-8")
     return path
+
+
+def build_digest(
+    top_k: int,
+    since_days: int | None,
+    seniority_include: set[str] | None,
+    location_include: set[str] | None,
+    new_only: bool = False,
+) -> tuple[str, pd.DataFrame]:
+    """Score, mark newness, optionally narrow to new arrivals, and render.
+
+    Shared by the CLI below and by orchestrator.py, so the two entry points can
+    never drift apart on what a digest contains.
+    """
+    boundary = new_since_boundary()
+    ranked, pool_size = score_unlabeled(since_days, seniority_include, location_include)
+    ranked = mark_new(ranked, boundary)
+    if new_only:
+        ranked = ranked[ranked["is_new"]].reset_index(drop=True)
+    markdown = format_digest(
+        ranked, top_k, pool_size, since_days, seniority_include, location_include, boundary
+    )
+    return markdown, ranked
 
 
 def _parse_seniority(args: argparse.Namespace) -> set[str] | None:
@@ -204,6 +286,7 @@ def main() -> None:
     parser.add_argument("--all-seniority", action="store_true", help="show every seniority, ignoring preferences.py")
     parser.add_argument("--location", help="comma-separated location tokens to show, overriding preferences.py (e.g. berlin,munich)")
     parser.add_argument("--all-locations", action="store_true", help="show every location, ignoring preferences.py")
+    parser.add_argument("--new-only", action="store_true", help="show only postings first seen since the previous digest")
     parser.add_argument("--no-save", action="store_true", help="print only, do not write the markdown copy")
     args = parser.parse_args()
 
@@ -211,8 +294,9 @@ def main() -> None:
     seniority_include = _parse_seniority(args)
     location_include = _parse_location(args)
 
-    ranked, pool_size = score_unlabeled(since_days, seniority_include, location_include)
-    markdown = format_digest(ranked, args.top_k, pool_size, since_days, seniority_include, location_include)
+    markdown, _ = build_digest(
+        args.top_k, since_days, seniority_include, location_include, args.new_only
+    )
     print(markdown)
 
     if not args.no_save:

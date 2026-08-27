@@ -36,9 +36,8 @@ from pathlib import Path
 from ranking.digest import (
     DEFAULT_DAYS,
     DEFAULT_TOP_K,
-    format_digest,
+    build_digest,
     save_digest,
-    score_unlabeled,
 )
 from ranking.preferences import LOCATION_INCLUDE, SENIORITY_INCLUDE
 
@@ -166,6 +165,7 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=DEFAULT_DAYS, help=f"only rank postings scraped in the last N days, 0 for no limit (default {DEFAULT_DAYS})")
     parser.add_argument("--all-seniority", action="store_true", help="ignore the seniority filter in preferences.py")
     parser.add_argument("--all-locations", action="store_true", help="ignore the location filter in preferences.py")
+    parser.add_argument("--new-only", action="store_true", help="digest only postings first seen since the previous digest")
     args = parser.parse_args()
 
     results: list[StageResult] = []
@@ -197,8 +197,9 @@ def main() -> int:
     location_include = None if args.all_locations else LOCATION_INCLUDE
 
     started = time.monotonic()
-    ranked, pool_size = score_unlabeled(since_days, seniority_include, location_include)
-    markdown = format_digest(ranked, args.top_k, pool_size, since_days, seniority_include, location_include)
+    markdown, ranked = build_digest(
+        args.top_k, since_days, seniority_include, location_include, args.new_only
+    )
     results.append(StageResult("rank", True, f"{len(ranked)} postings ranked", time.monotonic() - started))
 
     print()
