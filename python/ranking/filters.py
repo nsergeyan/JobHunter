@@ -68,6 +68,23 @@ NON_ENGLISH_MARKERS = {
                 "tiene", "puede"},
     "italian": {"del", "della", "una", "che", "nel", "alla", "sono", "nostro", "questa",
                 "il", "di", "gli", "dei", "delle", "anche", "sia"},
+    "polish": {"nie", "jest", "się", "oraz", "dla", "przez", "które", "który", "która",
+               "będzie", "naszych", "naszym", "pracy", "zespołu", "wymagania", "umowa",
+               "naszej", "tego", "jako", "aby", "lub", "przy", "naszego", "naszą",
+               "naszymi", "swoje", "jesteś", "masz", "twoje", "w", "na", "od", "po", "za",
+               "że", "jak", "tym", "tej", "być", "ale", "już", "tak", "czy", "nad", "pod",
+               "jego", "jej", "ich", "nasz", "nasza", "będziesz", "możesz", "twoja", "twój",
+               "wszystkie", "których", "ma", "mamy", "chcesz", "nam", "nas", "ze", "bez",
+               "pracę", "praca", "firmy"},
+    "portuguese": {"não", "uma", "você", "nossa", "nosso", "também", "são", "está", "pelo",
+                   "pela", "seus", "suas", "das", "dos", "mais", "muito"},
+    # Swedish, Danish and Norwegian share most function words, and telling them apart
+    # matters less than telling any of them from English.
+    "scandinavian": {"och", "att", "som", "har", "det", "är", "på", "inte", "eller", "og",
+                     "ikke", "vil", "kan", "skal", "eller", "från", "eftersom", "våra",
+                     "vår", "din", "hos", "arbetar", "erfarenhet"},
+    "finnish": {"ja", "että", "sekä", "tai", "ovat", "meidän", "työtä", "kanssa", "voit",
+                "olet", "sinun", "myös", "tämä", "kuten", "hakemus"},
 }
 
 # ISO 639-1 codes for display. Slicing the name would give "ge" for german and
@@ -78,6 +95,10 @@ LANGUAGE_CODES = {
     "french": "fr",
     "spanish": "es",
     "italian": "it",
+    "polish": "pl",
+    "portuguese": "pt",
+    "scandinavian": "sv/da/no",
+    "finnish": "fi",
 }
 
 # Share of tokens that must be one language's function words before a posting counts
@@ -131,7 +152,10 @@ def detect_written_language(raw_text: str | None) -> tuple[str | None, float]:
     """
     if not isinstance(raw_text, str) or not raw_text:
         return None, 0.0
-    tokens = [t for t in re.split(r"[^a-zà-ÿ0-9]+", raw_text.lower()) if t]
+    # The character class has to cover Latin Extended-A (\u0100-\u017f), not just
+    # Latin-1. Without it Polish words split at ą/ć/ę/ł/ń/ś/ź/ż, so "się" and
+    # "będzie" never matched and Polish postings scored about half what they should.
+    tokens = [t for t in re.split(r"[^a-zà-ÿ\u0100-\u017f0-9]+", raw_text.lower()) if t]
     if len(tokens) < MIN_TOKENS_FOR_DETECTION:
         return None, 0.0
 

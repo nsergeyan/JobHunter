@@ -9,7 +9,9 @@ import pandas as pd
 import pytest
 
 from ranking.filters import (
+    LANGUAGE_CODES,
     NETHERLANDS_LOCATION_TERMS,
+    NON_ENGLISH_MARKERS,
     detect_written_language,
     drop_language_blocked,
     is_written_in_non_english,
@@ -214,3 +216,47 @@ class TestTwoKindsOfLanguageFilter:
     def test_empty_frame_is_returned_unchanged(self):
         df = pd.DataFrame(columns=["language_requirement", "raw_text"])
         assert drop_language_blocked(df).empty
+
+
+class TestInflectedLanguages:
+    """Polish is the case that exposed two separate bugs, so it gets its own tests.
+
+    The marker list was too thin for a heavily inflected language, and the tokeniser
+    only covered Latin-1, so Polish words split apart at their own diacritics and
+    could never match. Together those halved the score and let a Polish posting
+    through both the filter and, downstream, into the embedder, where its token
+    density then broke the benchmark run.
+    """
+
+    POLISH = (
+        "Forma zatrudnienia umowa o pracę. Lokalizacja Katowice lub Warszawa, "
+        "pracujemy dwa dni w tygodniu z biura. Nasz zespół pokrywa kompetencyjnie "
+        "obszar Cloud DevOps oraz odpowiada za rozwój platformy. Jeśli chcesz "
+        "dołączyć do nas i masz doświadczenie, które jest nam potrzebne, to "
+        "czekamy na twoje zgłoszenie. Oferujemy pracę w zespole, który się rozwija."
+    )
+
+    def test_polish_posting_is_detected(self):
+        language, ratio = detect_written_language(self.POLISH)
+        assert language == "polish"
+        assert is_written_in_non_english(self.POLISH) is True
+
+    def test_diacritics_do_not_split_words(self):
+        # "się" must survive tokenisation as one token. If the character class drops
+        # back to Latin-1 it becomes "si" + "e" and stops matching.
+        assert detect_written_language(self.POLISH)[1] > 0.10
+
+    def test_polish_has_a_language_code(self):
+        # Every detectable language needs one, or the digest tag falls back to the
+        # full name and the column stops lining up.
+        for language in NON_ENGLISH_MARKERS:
+            assert language in LANGUAGE_CODES, f"{language} has no display code"
+
+    def test_english_is_still_not_flagged_as_polish(self):
+        english = (
+            "We are looking for a cloud engineer to join the platform team in "
+            "Amsterdam. You will work on infrastructure as code, CI pipelines and "
+            "observability, with a focus on reliability and cost control across our "
+            "estate. Experience with Terraform and Kubernetes is what we care about."
+        )
+        assert is_written_in_non_english(english) is False
