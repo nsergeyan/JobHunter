@@ -8,7 +8,6 @@ import io.github.cdimascio.dotenv.Dotenv;
 
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 
 /** Standalone entry point: exercises only the Magnet.me scraper against the real DB. */
@@ -26,7 +25,7 @@ public final class RunMagnetOnly {
 
         HttpFetcher fetcher = new JdkHttpFetcher();
 
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + databasePath)) {
+        try (Connection conn = SchemaInitializer.openConnection(databasePath)) {
             int magnetMeCount = new MagnetMeScraper(fetcher).run(conn);
             System.out.println("Upserted " + magnetMeCount + " vacancies from Magnet.me.");
         }

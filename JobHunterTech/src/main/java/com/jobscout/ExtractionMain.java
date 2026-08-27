@@ -15,7 +15,6 @@ import io.github.cdimascio.dotenv.Dotenv;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.Arrays;
@@ -73,7 +72,7 @@ public final class ExtractionMain {
                     + "' -- expected 'ollama', 'gemini', or 'gemini-then-ollama'.");
         };
 
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + databasePath)) {
+        try (Connection conn = SchemaInitializer.openConnection(databasePath)) {
             List<VacancyToExtract> pending = ExtractionRepository.findUnextractedVacancies(conn);
             System.out.println("Found " + pending.size() + " vacancies to extract (provider=" + provider
                     + ", model=" + model + ").");

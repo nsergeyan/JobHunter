@@ -8,7 +8,6 @@ import io.github.cdimascio.dotenv.Dotenv;
 
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 
 /** Standalone entry point: exercises only the Lever scraper against the real DB. */
@@ -26,7 +25,7 @@ public final class RunLeverOnly {
 
         HttpFetcher fetcher = new JdkHttpFetcher();
 
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + databasePath)) {
+        try (Connection conn = SchemaInitializer.openConnection(databasePath)) {
             int leverCount = new LeverScraper(fetcher).run(conn);
             System.out.println("Upserted " + leverCount + " vacancies from Lever-hosted companies.");
         }

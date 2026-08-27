@@ -8,13 +8,17 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Real HttpFetcher backed by the JDK's built-in HttpClient. Applies a random delay
- * after every request (rate limiting) and a fixed User-Agent, same as the Python
- * BaseScraper -- both are read from environment variables so behavior stays
- * configurable via .env without code changes.
+ * between requests TO THE SAME HOST (see HostRateLimiter) and a fixed User-Agent,
+ * both read from environment variables so behavior stays configurable via .env
+ * without code changes.
+ *
+ * One fetcher is shared across every scraper, which is what makes the pacing a
+ * real guarantee rather than a per-scraper convention: the limiter inside it is
+ * the single place that knows when each host was last contacted, even when
+ * several scrapers run at once.
  *
  * Transient failures (429, 5xx, dropped connections) are retried per RetryPolicy,
  * honoring a server-supplied Retry-After when there is one. Permanent ones (404 on
@@ -25,8 +29,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class JdkHttpFetcher implements HttpFetcher {
     private final HttpClient client;
     private final String userAgent;
-    private final double minDelaySeconds;
-    private final double maxDelaySeconds;
+    private final HostRateLimiter rateLimiter;
     private final Duration requestTimeout;
     private final RetryPolicy retryPolicy;
 
@@ -68,8 +71,7 @@ public class JdkHttpFetcher implements HttpFetcher {
             Duration requestTimeout, RetryPolicy retryPolicy) {
         this.client = client;
         this.userAgent = userAgent;
-        this.minDelaySeconds = minDelaySeconds;
-        this.maxDelaySeconds = maxDelaySeconds;
+        this.rateLimiter = new HostRateLimiter(minDelaySeconds, maxDelaySeconds);
         this.requestTimeout = requestTimeout;
         this.retryPolicy = retryPolicy;
     }
@@ -143,6 +145,11 @@ public class JdkHttpFetcher implements HttpFetcher {
     }
 
     private Attempt attemptOnce(String url, HttpRequest request) {
+        // Before, not after. Waiting for this host's turn up front is what lets two
+        // scrapers on different hosts overlap, and it still guarantees no server sees
+        // requests closer together than the configured delay. Applies to retries too:
+        // a server that just rate-limited us is the last one to hammer.
+        rateLimiter.acquire(url);
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 400) {
@@ -167,10 +174,6 @@ public class JdkHttpFetcher implements HttpFetcher {
             ScraperException failure = new ScraperException(
                     "Request to " + redactQuery(url) + " was interrupted", exc);
             return Attempt.failed(failure, false, RetryPolicy.NO_RETRY_AFTER);
-        } finally {
-            // Politeness delay belongs to every attempt, including failed ones: a
-            // server that just rate-limited us is the last one to hammer.
-            sleepBetweenRequests();
         }
     }
 
@@ -204,16 +207,6 @@ public class JdkHttpFetcher implements HttpFetcher {
     private static String redactQuery(String url) {
         int queryIndex = url.indexOf('?');
         return queryIndex == -1 ? url : url.substring(0, queryIndex) + "?[redacted]";
-    }
-
-    private void sleepBetweenRequests() {
-        // ThreadLocalRandom.nextDouble requires a strictly greater upper bound, unlike
-        // Python's random.uniform -- fall back to a fixed delay when min == max (tests
-        // set both to 0 for a no-op sleep).
-        double seconds = maxDelaySeconds > minDelaySeconds
-                ? ThreadLocalRandom.current().nextDouble(minDelaySeconds, maxDelaySeconds)
-                : minDelaySeconds;
-        sleepSeconds(seconds);
     }
 
     private static void sleepSeconds(double seconds) {

@@ -61,6 +61,30 @@ public final class SchemaInitializer {
         }
     }
 
+    /**
+     * A connection configured for concurrent use.
+     *
+     * WAL lets readers and a writer coexist instead of locking each other out, and
+     * busy_timeout makes a thread that finds the write lock taken WAIT for it rather
+     * than failing instantly with SQLITE_BUSY. Both matter now that scrapers run in
+     * parallel, each on its own connection: without them, two scrapers finishing a
+     * posting at the same moment is enough to lose one.
+     *
+     * WAL is a property of the database file and persists once set. busy_timeout is
+     * per connection, so it has to be set on every one.
+     */
+    public static Connection openConnection(String dbPath) throws SQLException {
+        Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+        try (Statement stmt = conn.createStatement()) {
+            stmt.execute("PRAGMA journal_mode=WAL");
+            stmt.execute("PRAGMA busy_timeout=30000");
+        } catch (SQLException exc) {
+            conn.close();
+            throw exc;
+        }
+        return conn;
+    }
+
     private static void addColumnIfMissing(Connection conn, String table, String column, String columnType) {
         try (Statement checkStmt = conn.createStatement();
                 ResultSet rs = checkStmt.executeQuery("PRAGMA table_info(" + table + ")")) {
