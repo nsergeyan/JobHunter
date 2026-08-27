@@ -44,7 +44,22 @@ from ranking.filters import requires_non_english_language
 
 MIN_SKILL_COUNT = 3
 TITLE_MAX_FEATURES = 150
+
+# Description TF-IDF. The title carries the role, but the body is where a posting
+# says whether the ML is real or decorative, and it was going unused as features.
+# max_df drops terms that show up in most postings, which is what kills the
+# boilerplate (equal-opportunity statements, benefits lists, "fast-paced
+# environment") that would otherwise crowd out the vocabulary budget.
+DESCRIPTION_MAX_FEATURES = 300
+DESCRIPTION_MIN_DF = 3
+DESCRIPTION_MAX_DF = 0.8
 N_FOLDS = 5
+
+# One fold split is a lottery at this sample size: with ~66 positives, a single
+# precision@5 moves by 0.20 if one posting changes place. Repeating the whole
+# cross-validation under several shuffles and reporting the spread is what makes
+# "A beats B" mean something rather than "A got a luckier split than B".
+CV_SEEDS = (42, 43, 44, 45, 46)
 
 # The ordinal scale the model ranks on: no=0, maybe=1, yes=2. The expected
 # rating is the probability-weighted average of these, so it always falls
@@ -67,13 +82,29 @@ class FeatureBuilder:
     test-set vocabulary into training.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, use_description: bool = False) -> None:
+        self.use_description = use_description
         self.skill_vocab: list[str] = []
         self.seniority_categories: list[str] = []
         self.remote_categories: list[str] = []
         self.title_vectorizer = TfidfVectorizer(
             max_features=TITLE_MAX_FEATURES, stop_words="english", ngram_range=(1, 2)
         )
+        # Fitted on the TRAIN fold only, like everything else here, so test-set
+        # wording never leaks into the vocabulary. None when the feature is off.
+        self.description_vectorizer = (
+            TfidfVectorizer(
+                max_features=DESCRIPTION_MAX_FEATURES,
+                min_df=DESCRIPTION_MIN_DF,
+                max_df=DESCRIPTION_MAX_DF,
+                stop_words="english",
+                ngram_range=(1, 2),
+                sublinear_tf=True,
+            )
+            if use_description
+            else None
+        )
+
         # Min/max for the optional semantic feature (cosine similarity to the
         # preference profile), learned on the TRAIN fold only. Stay None unless a
         # df carrying a "cosine_score" column is seen in fit().
@@ -100,6 +131,9 @@ class FeatureBuilder:
         self.remote_categories = sorted(df["remote_policy"].fillna("unknown").unique())
 
         self.title_vectorizer.fit(df["title"].fillna(""))
+
+        if self.description_vectorizer is not None:
+            self.description_vectorizer.fit(df["raw_text"].fillna(""))
 
         # Optional semantic feature. Learn the [0, 1] scaling on the train fold
         # only so it sits on the same range as the 0/1 and TF-IDF features and
@@ -135,6 +169,16 @@ class FeatureBuilder:
 
         feature_frames = [skill_cols, seniority_cols, remote_cols, title_cols]
 
+        if self.description_vectorizer is not None:
+            description_matrix = self.description_vectorizer.transform(df["raw_text"].fillna("")).toarray()
+            feature_frames.append(
+                pd.DataFrame(
+                    description_matrix,
+                    columns=[f"desc:{t}" for t in self.description_vectorizer.get_feature_names_out()],
+                    index=df.index,
+                )
+            )
+
         # Semantic feature, only when the caller attached a cosine_score column
         # (so digest.py and other callers that don't embed keep working). Scale
         # with the train-fold min/max; clip because a test row can fall outside it.
@@ -156,25 +200,70 @@ def precision_at_k(ranked_true_labels: np.ndarray, k: int) -> float:
     return float(np.mean(top_k == 2))
 
 
-def cross_validate(df: pd.DataFrame, y_original: np.ndarray) -> dict:
+def _dcg(gains: np.ndarray) -> float:
+    """Discounted cumulative gain: each posting's value divided by a log of how
+    far down the list it sits, so a good match at rank 1 is worth more than the
+    same match at rank 10."""
+    positions = np.arange(1, len(gains) + 1)
+    return float(np.sum(gains / np.log2(positions + 1)))
+
+
+def ndcg_at_k(ranked_true_labels: np.ndarray, k: int) -> float:
+    """Normalised DCG over the top k, using the 0/1/2 label directly as the gain.
+
+    Why this sits next to precision@k rather than replacing it. precision@k asks
+    one question: of the top k, how many were a "yes"? It scores a maybe exactly
+    like a no, and it cannot tell a list of five yeses in the right order from
+    the same five shuffled. NDCG uses the whole ordinal scale the model was built
+    to predict, and it rewards putting the best match first, which is what the
+    digest actually needs.
+
+    Gains are linear (0, 1, 2) rather than the exponential 2^rel - 1 convention.
+    On a three-point scale the exponential form mostly just declares a yes worth
+    three maybes, which is a claim about preference nobody here has made.
+
+    Normalised against the best achievable ordering of the same labels, so 1.0
+    means "could not have ranked these better" and the number stays comparable
+    across folds with different numbers of positives.
+    """
+    top_k = ranked_true_labels[:k]
+    ideal = np.sort(ranked_true_labels)[::-1][:k]
+    ideal_dcg = _dcg(ideal)
+    if ideal_dcg == 0:
+        # No positives at all in this slice: every ordering is equally good, so
+        # calling it a perfect 1.0 would flatter the model. Score it 0.
+        return 0.0
+    return _dcg(top_k) / ideal_dcg
+
+
+def cross_validate(
+    df: pd.DataFrame,
+    y_original: np.ndarray,
+    use_description: bool = False,
+    random_state: int = 42,
+) -> dict:
     """Runs the N_FOLDS train/test rotation once and returns both the per-fold
     metrics (for an honest performance estimate) and the out-of-fold expected
     rating for every row, aligned to df's original row order -- each row's
     oof_scores entry came from a model that never saw that row during training,
     so the full array is usable as one fair, full-dataset ranking score for the
     benchmark.
+
+    random_state picks the fold shuffle. Vary it (see repeated_cross_validate) to
+    separate a real improvement from a lucky split.
     """
-    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
     oof_scores = np.zeros(len(df))
     accuracies = []
     per_class_scores = {name: {"precision": [], "recall": [], "f1-score": []} for name in LABEL_NAMES}
     precision_at_k_scores: dict[int, list[float]] = {5: [], 10: [], 20: []}
+    ndcg_at_k_scores: dict[int, list[float]] = {5: [], 10: [], 20: []}
 
     for train_idx, test_idx in skf.split(df, y_original):
         df_train, df_test = df.iloc[train_idx], df.iloc[test_idx]
         y_train, y_test = y_original[train_idx], y_original[test_idx]
 
-        builder = FeatureBuilder().fit(df_train)
+        builder = FeatureBuilder(use_description=use_description).fit(df_train)
         X_train = builder.transform(df_train)
         X_test = builder.transform(df_test)
 
@@ -193,21 +282,59 @@ def cross_validate(df: pd.DataFrame, y_original: np.ndarray) -> dict:
             for metric in per_class_scores[class_name]:
                 per_class_scores[class_name][metric].append(report[class_name][metric])
 
-        ranked_true = y_test[np.argsort(-scores)]
+        ranked_true = y_test[np.argsort(-scores, kind="stable")]
         for k in precision_at_k_scores:
             if k <= len(ranked_true):
                 precision_at_k_scores[k].append(precision_at_k(ranked_true, k))
+                ndcg_at_k_scores[k].append(ndcg_at_k(ranked_true, k))
 
     return {
         "oof_scores": oof_scores,
         "accuracies": accuracies,
         "per_class_scores": per_class_scores,
         "precision_at_k_scores": precision_at_k_scores,
+        "ndcg_at_k_scores": ndcg_at_k_scores,
     }
 
 
-def run_cross_validation(df: pd.DataFrame, y_original: np.ndarray) -> dict:
-    results = cross_validate(df, y_original)
+def repeated_cross_validate(
+    df: pd.DataFrame,
+    y_original: np.ndarray,
+    use_description: bool = False,
+    seeds: tuple[int, ...] = CV_SEEDS,
+) -> dict:
+    """Run the whole cross-validation once per seed and collect the out-of-fold
+    ranking metrics from each.
+
+    Each seed produces one complete out-of-fold ranking of every labeled posting,
+    scored by models that never saw the row they are scoring. Comparing the mean
+    and spread across seeds is the difference between "this feature helps" and
+    "this feature got a friendlier shuffle".
+    """
+    per_seed: dict[str, dict[int, list[float]]] = {
+        "precision": {5: [], 10: [], 20: []},
+        "ndcg": {5: [], 10: [], 20: []},
+    }
+    for seed in seeds:
+        results = cross_validate(df, y_original, use_description, random_state=seed)
+        ranked_true = y_original[np.argsort(-results["oof_scores"], kind="stable")]
+        for k in per_seed["precision"]:
+            if k <= len(ranked_true):
+                per_seed["precision"][k].append(precision_at_k(ranked_true, k))
+                per_seed["ndcg"][k].append(ndcg_at_k(ranked_true, k))
+    return per_seed
+
+
+def report_repeated(label: str, per_seed: dict, seeds: tuple[int, ...] = CV_SEEDS) -> None:
+    print(f"\n=== {label}: out-of-fold across {len(seeds)} seeds (mean +/- std) ===")
+    for metric in ("precision", "ndcg"):
+        for k, scores in per_seed[metric].items():
+            if scores:
+                print(f"  {metric}@{k:<3}{np.mean(scores):.2f} (+/- {np.std(scores):.2f})")
+
+
+def run_cross_validation(df: pd.DataFrame, y_original: np.ndarray, use_description: bool = False) -> dict:
+    results = cross_validate(df, y_original, use_description)
 
     print(f"=== {N_FOLDS}-fold cross-validation (averaged across folds) ===")
     print(f"accuracy: {np.mean(results['accuracies']):.2f} (+/- {np.std(results['accuracies']):.2f})")
@@ -226,16 +353,23 @@ def run_cross_validation(df: pd.DataFrame, y_original: np.ndarray) -> dict:
     for k, scores in results["precision_at_k_scores"].items():
         if scores:
             print(f"  precision@{k}: {np.mean(scores):.2f} (+/- {np.std(scores):.2f})")
+    for k, scores in results["ndcg_at_k_scores"].items():
+        if scores:
+            print(f"  ndcg@{k}:      {np.mean(scores):.2f} (+/- {np.std(scores):.2f})")
 
     # Out-of-fold precision@k pools every row's held-out prediction and ranks the
     # whole list once -- exactly the single ranked shortlist this feeds. This is
     # the headline number (and what ranking.benchmark reports). No +/- because
     # it's one ranking, not an average; read it alongside the per-fold spread.
-    ranked_true = y_original[np.argsort(-results["oof_scores"])]
+    ranked_true = y_original[np.argsort(-results["oof_scores"], kind="stable")]
     print("\n=== Precision@k, out-of-fold over the full ranked list -- the headline ===")
     for k in results["precision_at_k_scores"]:
         if k <= len(ranked_true):
             print(f"  precision@{k}: {precision_at_k(ranked_true, k):.2f}")
+    print("\n=== NDCG@k, out-of-fold -- same ranking, scored on the full 0/1/2 scale ===")
+    for k in results["ndcg_at_k_scores"]:
+        if k <= len(ranked_true):
+            print(f"  ndcg@{k}: {ndcg_at_k(ranked_true, k):.2f}")
 
     return results
 
@@ -246,6 +380,16 @@ def main() -> None:
         "--semantic",
         action="store_true",
         help="add the cosine-similarity-to-preference feature (needs Ollama embeddings; slower)",
+    )
+    parser.add_argument(
+        "--description",
+        action="store_true",
+        help="add TF-IDF features over the posting description (raw_text), not just the title",
+    )
+    parser.add_argument(
+        "--compare",
+        action="store_true",
+        help="repeat CV across seeds with and without --description, to see whether it actually helps",
     )
     args = parser.parse_args()
 
@@ -260,11 +404,21 @@ def main() -> None:
 
     y_original = df["label"].to_numpy()
 
-    run_cross_validation(df, y_original)
+    run_cross_validation(df, y_original, use_description=args.description)
+
+    # One split is a lottery at this sample size, so the verdict on any feature
+    # comes from the across-seed spread, never from a single run.
+    if args.compare:
+        print("\nRepeating cross-validation across seeds, with and without the description features...")
+        report_repeated("baseline features", repeated_cross_validate(df, y_original, use_description=False))
+        report_repeated("+ description TF-IDF", repeated_cross_validate(df, y_original, use_description=True))
+    else:
+        label = "+ description TF-IDF" if args.description else "baseline features"
+        report_repeated(label, repeated_cross_validate(df, y_original, use_description=args.description))
 
     print("\n=== Coefficients from a final model trained on ALL labeled data ===")
     print("(not evaluated -- this model has seen everything, it's here to inspect what it learned)")
-    builder = FeatureBuilder().fit(df)
+    builder = FeatureBuilder(use_description=args.description).fit(df)
     X_all = builder.transform(df)
     model = LogisticRegression(max_iter=1000, class_weight="balanced")
     model.fit(X_all, y_original)

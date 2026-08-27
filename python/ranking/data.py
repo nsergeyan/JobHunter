@@ -15,6 +15,7 @@ SELECT v.id AS vacancy_id, v.title, v.company, v.raw_text,
 FROM labels l
 JOIN vacancies v ON v.id = l.vacancy_id
 JOIN vacancy_extractions e ON e.vacancy_id = l.vacancy_id
+ORDER BY v.id
 """
 
 # Postings that have been extracted but not yet rated -- the ones a daily digest
@@ -34,6 +35,12 @@ JOIN vacancy_extractions e ON e.vacancy_id = v.id
 LEFT JOIN labels l ON l.vacancy_id = v.id
 WHERE l.label IS NULL
 """
+
+# Row order has to be pinned. SQLite makes no ordering promise without ORDER BY,
+# and the order it happens to return rows in feeds StratifiedKFold's shuffle and
+# every tie-break in the final ranking -- so without this, two identical runs
+# produced different precision@k, which makes any A/B comparison meaningless.
+ORDER_BY_ID_SQL = " ORDER BY v.id"
 
 # Optional LIVENESS window, and the distinction matters. The scraper refreshes
 # scraped_at on every run for any posting still on its board (VacancyRepository's
@@ -70,6 +77,7 @@ def load_unlabeled_vacancies(since_days: int | None = None) -> pd.DataFrame:
         cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
         sql += STILL_LISTED_SQL
         params = {"cutoff": cutoff.isoformat().replace("+00:00", "Z")}
+    sql += ORDER_BY_ID_SQL
 
     conn = sqlite3.connect(DB_PATH)
     try:
