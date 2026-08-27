@@ -80,6 +80,64 @@ def format_screen(vacancy: db.VacancyToLabel, position: int, total: int) -> str:
     return "\n".join(lines)
 
 
+LABEL_NAMES = {0: "no", 1: "maybe", 2: "yes"}
+
+
+def run_conflicts() -> None:
+    """Re-rate jobs that got duplicated and rated inconsistently.
+
+    Companies re-list expired jobs under a fresh posting id, and sometimes submit
+    the same job twice at once, so the same role reaches you more than once, often
+    weeks apart. Rating it differently each time is an easy thing to do and leaves
+    the model with contradictory examples of the same posting.
+
+    One screen per job, not per row. Whatever you press is written to every copy,
+    so the contradiction cannot come back. Only exact duplicates appear here, same
+    title, company AND location: the same role in two cities is two jobs, and
+    rating them differently is a preference rather than a mistake.
+    """
+    conn = db.connect()
+    groups = db.find_conflicting_duplicates(conn)
+    if not groups:
+        print("No conflicting duplicates. Nothing to fix.")
+        return
+
+    copies = sum(len(g.vacancy_ids) for g in groups)
+    print(f"{len(groups)} jobs were rated inconsistently across {copies} duplicate rows.")
+    print("Rating one here overwrites every copy of that job.\n")
+
+    for position, group in enumerate(groups, start=1):
+        history = "  ".join(
+            f"{LABEL_NAMES[label]} on {when}" for label, when in group.previous
+        )
+        print(format_screen(group.posting, position, len(groups)))
+        print(f"\n  previously rated: {history}   ({len(group.vacancy_ids)} copies)")
+
+        key = ""
+        while key not in VALID_KEYS:
+            key = read_key()
+
+        if key in {"0", "1", "2"}:
+            db.save_label_for_group(conn, group.vacancy_ids, int(key))
+            print(f"\nSet all {len(group.vacancy_ids)} copies to {LABEL_NAMES[int(key)]}.\n")
+        elif key == "r":
+            print("\n" + group.posting.raw_text + "\n")
+            key = ""
+            while key not in {"0", "1", "2", "s", "q"}:
+                key = read_key()
+            if key in {"0", "1", "2"}:
+                db.save_label_for_group(conn, group.vacancy_ids, int(key))
+                print(f"\nSet all {len(group.vacancy_ids)} copies to {LABEL_NAMES[int(key)]}.\n")
+            elif key == "q":
+                break
+        elif key == "q":
+            break
+        # "s" and "u" fall through: leave this job as it is and move on.
+
+    remaining = len(db.find_conflicting_duplicates(conn))
+    print(f"Done. {remaining} conflicting job(s) left.")
+
+
 def order_queue(unlabeled: list[db.VacancyToLabel], order: str) -> tuple[list[db.VacancyToLabel], str]:
     """The queue to work through, plus a one-line description of why it is in that
     order. Returned together so the CLI can always tell you what you are labeling.
@@ -166,8 +224,17 @@ def main() -> None:
              "random: uniformly random, safe for evaluation. "
              "holdout: top up the reserved evaluation sample.",
     )
+    parser.add_argument(
+        "--fix-conflicts",
+        action="store_true",
+        help="re-rate jobs that got duplicated and rated inconsistently, applying one "
+             "rating to every copy",
+    )
     args = parser.parse_args()
-    run(args.order)
+    if args.fix_conflicts:
+        run_conflicts()
+    else:
+        run(args.order)
 
 
 if __name__ == "__main__":

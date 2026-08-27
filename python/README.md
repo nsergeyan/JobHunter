@@ -128,7 +128,27 @@ offered by the uncertainty sampler.
 python -m labeling.cli                  # most uncertain first, holdout excluded
 python -m labeling.cli --order random   # uniformly random, safe for evaluation
 python -m labeling.cli --order holdout  # top up the evaluation sample
+python -m labeling.cli --fix-conflicts  # re-rate jobs you rated inconsistently
 ```
+
+## Duplicates, and why they matter
+
+The same job reaches you more than once, for two reasons neither `external_id`
+can catch. A company re-lists an expired job and the platform issues a **fresh
+posting id**, or it submits the same job **twice at once** under consecutive ids
+(one tagged with a city, one without). Roughly a quarter of Magnet.me and
+SmartRecruiters postings sit in a duplicate group.
+
+Two consequences. The model sees a duplicated job several times in training, so
+it counts several times. And in cross-validation the copies can land in different
+folds, letting the model score a test posting it effectively memorised, which
+inflates precision@k precisely where you read it.
+
+`--fix-conflicts` handles the labeling half: it shows one screen per job that was
+duplicated **and rated inconsistently**, along with what you said last time, and
+writes your answer to every copy. Only exact duplicates appear, same title,
+company AND location. The same role in two cities is two jobs, and rating them
+differently is a preference rather than a mistake.
 
 Two runtime notes. Extraction is the slow stage, roughly 20 seconds per posting
 through local Ollama, so a few hundred fresh postings takes an hour or more;
