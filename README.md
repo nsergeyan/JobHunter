@@ -15,7 +15,7 @@ ranking model → a rigorous benchmark against two untrained baselines.
 
 - **Real, self-collected data.** ~665 live postings scraped from 5 applicant-tracking
   platforms (not a downloaded dataset), 610 of them hand-labeled `0/1/2` for personal fit
-  (307 no / 215 maybe / 88 yes).
+  (302 no / 219 maybe / 89 yes).
 - **A real experiment, not a demo.** Does a model *trained* on those labels beat (a) an
   LLM asked to judge fit, and (b) ranking by embedding similarity? Measured with
   **precision@k on out-of-fold predictions**, all three on the same set.
@@ -120,8 +120,8 @@ scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking
 ## Methodology
 
 **Problem framing.** This is a small-sample, imbalanced, personalized *ranking* problem:
-610 labeled examples, ~14% strong positives, and the goal is a ranked shortlist, not a
-binary classifier. That framing drives every choice below.
+610 labels over 545 distinct jobs once duplicates are collapsed, ~14% strong positives,
+and the goal is a ranked shortlist, not a binary classifier. That framing drives every choice below.
 
 **Target variable.** The `0/1/2` label is treated as an ordinal scale (no < maybe < yes)
 rather than collapsed to binary. A multinomial logistic regression predicts `P(no)`,
@@ -154,7 +154,7 @@ involved. Currently the most promising of the three feature experiments, and sti
 conclusive, so it ships behind `--description`.
 
 **Model.** L2-regularized multinomial logistic regression (one weight vector per class).
-Chosen as the baseline *because* it's simple and interpretable: with ~481 rows and 60-100
+Chosen as the baseline *because* it's simple and interpretable: with 545 rows and 60-100
 engineered features, a higher-capacity model (LightGBM) would be easy to overfit and hard to
 justify before establishing how the simple baseline does. Since no feature variant yet
 separates from the cosine heuristic (see Results), the extra capacity and lost interpretability
@@ -162,13 +162,13 @@ of a tree model plainly isn't warranted at this sample size: there is no gap for
 that could be measured if it did.
 
 **Validation.** Stratified 5-fold cross-validation, not a single train/test split. A single
-80/20 split on ~574 rows is highly sensitive to which rows land where; 5-fold rotation
+80/20 split on 545 rows is highly sensitive to which rows land where; 5-fold rotation
 averages that variance and reports it explicitly (mean ± std across folds). Each fold's
 feature vocabulary (skills, TF-IDF terms) is fit on that fold's training data only, to avoid
 leaking test-set vocabulary into training.
 
 **Validation, take two: repeating the whole thing.** 5-fold rotation controls for *which rows
-land in which fold*, but not for *which shuffle produced the folds*. With ~88 positives, one
+land in which fold*, but not for *which shuffle produced the folds*. With 79 positives, one
 shuffle is a lottery: moving a single posting changes p@5 by 0.20. So the entire
 cross-validation is now repeated under 5 different shuffles and reported as a mean ± std
 across them. Every headline number below is that mean. The single-shuffle figures this
@@ -380,7 +380,7 @@ another language while only catching those that *named* a requirement.
 
 ## Future work
 
-**More labeled data (top lever).** With ~88 positives, precision@5 still carries a ±0.18
+**More labeled data (top lever).** With 79 positives, precision@5 still carries a ±0.18
 standard deviation, which is wide enough to swallow most feature experiments whole. Every open
 question below is really the same question: is the dataset big enough to answer it yet?
 Labeling is ongoing, now ordered by model uncertainty so each label buys more than it used to.
