@@ -9,7 +9,7 @@ import pandas as pd
 DB_PATH = Path(__file__).resolve().parents[2] / "data" / "job_scout.db"
 
 LOAD_LABELED_SQL = """
-SELECT v.id AS vacancy_id, v.title, v.company, v.raw_text,
+SELECT v.id AS vacancy_id, v.title, v.company, v.location, v.raw_text,
        e.skills, e.seniority, e.remote_policy, e.language_requirement,
        l.label, l.labeled_at
 FROM labels l
@@ -63,12 +63,53 @@ ORDER_BY_ID_SQL = " ORDER BY v.id"
 STILL_LISTED_SQL = " AND v.scraped_at >= :cutoff"
 
 
-def load_labeled_vacancies() -> pd.DataFrame:
+def collapse_exact_duplicates(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep one row per (company, title, location).
+
+    The same job reaches the database more than once, because companies re-list
+    expired postings under a fresh platform id and sometimes submit the same job
+    twice at once. Left alone that costs twice over: the model sees a duplicated
+    job several times in training so it counts several times, and in
+    cross-validation the copies can land in different folds, letting the model
+    score a test posting it has effectively memorised.
+
+    Only EXACT duplicates collapse here. The same role in two cities is two jobs
+    and keeps two rows, since rating them differently is a preference rather than
+    an error. Those near-duplicates still share almost identical text, so they are
+    handled the other way, by keeping them in one fold (see duplicate_group_ids).
+
+    Rows arrive ordered by id, so keeping the last keeps the most recent copy,
+    whose description matches what is currently on the board.
+    """
+    key = ["company", "title", "location"]
+    if df.empty or not set(key) <= set(df.columns):
+        return df
+    return df.drop_duplicates(subset=key, keep="last").reset_index(drop=True)
+
+
+def duplicate_group_ids(df: pd.DataFrame) -> pd.Series:
+    """A group number per row, shared by every copy of the same job.
+
+    Grouped on (company, title) and deliberately NOT on location: copies that
+    differ only by city still carry near-identical descriptions, which is what the
+    model reads, so they leak between folds just as badly as exact duplicates.
+    Grouping more broadly can only reduce leakage, never create it.
+    """
+    return df.groupby(["company", "title"], sort=False).ngroup()
+
+
+def load_labeled_vacancies(collapse_duplicates: bool = True) -> pd.DataFrame:
+    """Labeled postings, with exact duplicates collapsed to one row by default.
+
+    Pass collapse_duplicates=False to see the raw rows, which is what you want when
+    auditing the duplicates themselves rather than modelling on them.
+    """
     conn = sqlite3.connect(DB_PATH)
     try:
-        return pd.read_sql_query(LOAD_LABELED_SQL, conn)
+        df = pd.read_sql_query(LOAD_LABELED_SQL, conn)
     finally:
         conn.close()
+    return collapse_exact_duplicates(df) if collapse_duplicates else df
 
 
 def load_unlabeled_vacancies(since_days: int | None = None) -> pd.DataFrame:

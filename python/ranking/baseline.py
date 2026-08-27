@@ -35,10 +35,10 @@ import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 from sklearn.metrics import classification_report
 
-from ranking.data import load_labeled_vacancies
+from ranking.data import duplicate_group_ids, load_labeled_vacancies
 from ranking.embeddings import embedding_scores
 from ranking.filters import drop_language_blocked
 
@@ -241,6 +241,7 @@ def cross_validate(
     y_original: np.ndarray,
     use_description: bool = False,
     random_state: int = 42,
+    groups: np.ndarray | None = None,
 ) -> dict:
     """Runs the N_FOLDS train/test rotation once and returns both the per-fold
     metrics (for an honest performance estimate) and the out-of-fold expected
@@ -251,15 +252,29 @@ def cross_validate(
 
     random_state picks the fold shuffle. Vary it (see repeated_cross_validate) to
     separate a real improvement from a lucky split.
+
+    `groups` keeps every copy of the same job in the same fold. Without it, a job
+    that appears twice can be trained on and tested on in one run, and the model
+    scores the test copy by recognising text it has already seen. That inflates
+    precision@k exactly where it is read, since a confident prediction floats to
+    the top of the ranking.
+
+    StratifiedGroupKFold rather than plain GroupKFold, because dropping
+    stratification would be the worse trade: with 85 positives in 580 rows, folds
+    that happen to differ in class balance swamp whatever the grouping fixed.
     """
-    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
+    skf = (
+        StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
+        if groups is not None
+        else StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=random_state)
+    )
     oof_scores = np.zeros(len(df))
     accuracies = []
     per_class_scores = {name: {"precision": [], "recall": [], "f1-score": []} for name in LABEL_NAMES}
     precision_at_k_scores: dict[int, list[float]] = {5: [], 10: [], 20: []}
     ndcg_at_k_scores: dict[int, list[float]] = {5: [], 10: [], 20: []}
 
-    for train_idx, test_idx in skf.split(df, y_original):
+    for train_idx, test_idx in skf.split(df, y_original, groups=groups):
         df_train, df_test = df.iloc[train_idx], df.iloc[test_idx]
         y_train, y_test = y_original[train_idx], y_original[test_idx]
 
@@ -372,6 +387,7 @@ def repeated_cross_validate(
     y_original: np.ndarray,
     use_description: bool = False,
     seeds: tuple[int, ...] = CV_SEEDS,
+    groups: np.ndarray | None = None,
 ) -> dict:
     """Run the whole cross-validation once per seed and collect the out-of-fold
     ranking metrics from each.
@@ -390,7 +406,7 @@ def repeated_cross_validate(
     # uncertainty and a fair comparison against an untrained baseline needs both.
     oof_by_seed: list[np.ndarray] = []
     for seed in seeds:
-        results = cross_validate(df, y_original, use_description, random_state=seed)
+        results = cross_validate(df, y_original, use_description, random_state=seed, groups=groups)
         oof_by_seed.append(results["oof_scores"])
         ranked_true = y_original[np.argsort(-results["oof_scores"], kind="stable")]
         for k in per_seed["precision"]:
@@ -409,8 +425,9 @@ def report_repeated(label: str, per_seed: dict, seeds: tuple[int, ...] = CV_SEED
                 print(f"  {metric}@{k:<3}{np.mean(scores):.2f} (+/- {np.std(scores):.2f})")
 
 
-def run_cross_validation(df: pd.DataFrame, y_original: np.ndarray, use_description: bool = False) -> dict:
-    results = cross_validate(df, y_original, use_description)
+def run_cross_validation(df: pd.DataFrame, y_original: np.ndarray, use_description: bool = False,
+                         groups: np.ndarray | None = None) -> dict:
+    results = cross_validate(df, y_original, use_description, groups=groups)
 
     print(f"=== {N_FOLDS}-fold cross-validation (averaged across folds) ===")
     print(f"accuracy: {np.mean(results['accuracies']):.2f} (+/- {np.std(results['accuracies']):.2f})")
@@ -484,18 +501,24 @@ def main() -> None:
         df["cosine_score"] = embedding_scores(df)
 
     y_original = df["label"].to_numpy()
+    # Keeps every copy of a job in one fold, so the model cannot be tested on a
+    # posting it already trained on under a different id.
+    groups = duplicate_group_ids(df).to_numpy()
 
-    run_cross_validation(df, y_original, use_description=args.description)
+    run_cross_validation(df, y_original, use_description=args.description, groups=groups)
 
     # One split is a lottery at this sample size, so the verdict on any feature
     # comes from the across-seed spread, never from a single run.
     if args.compare:
         print("\nRepeating cross-validation across seeds, with and without the description features...")
-        report_repeated("baseline features", repeated_cross_validate(df, y_original, use_description=False))
-        report_repeated("+ description TF-IDF", repeated_cross_validate(df, y_original, use_description=True))
+        report_repeated("baseline features",
+                        repeated_cross_validate(df, y_original, use_description=False, groups=groups))
+        report_repeated("+ description TF-IDF",
+                        repeated_cross_validate(df, y_original, use_description=True, groups=groups))
     else:
         label = "+ description TF-IDF" if args.description else "baseline features"
-        report_repeated(label, repeated_cross_validate(df, y_original, use_description=args.description))
+        report_repeated(label, repeated_cross_validate(df, y_original, use_description=args.description,
+                                                       groups=groups))
 
     if args.time_split:
         report_time_split(time_split_evaluation(df, use_description=args.description))

@@ -34,7 +34,7 @@ from ranking.baseline import (
     precision_at_k,
     repeated_cross_validate,
 )
-from ranking.data import load_labeled_vacancies
+from ranking.data import duplicate_group_ids, load_labeled_vacancies
 from ranking.embeddings import embedding_scores
 from ranking.filters import drop_language_blocked
 from ranking.llm_judge import judge_all
@@ -167,6 +167,7 @@ def main() -> None:
     before = len(df)
     df = drop_language_blocked(df)
     y_original = df["label"].to_numpy()
+    groups = duplicate_group_ids(df).to_numpy()
     print(f"Dropped {before - len(df)} postings naming a non-English requirement "
           f"({len(df)} remain, {int(np.sum(y_original == 2))} rated 'yes')\n")
 
@@ -181,11 +182,11 @@ def main() -> None:
     # repeating it across shuffles costs almost nothing and is the only way the
     # trained rows mean anything.
     print(f"Cross-validating across {len(CV_SEEDS)} shuffles, hand-crafted features...")
-    lr_base = repeated_cross_validate(without_cosine, y_original)
+    lr_base = repeated_cross_validate(without_cosine, y_original, groups=groups)
     print(f"Cross-validating across {len(CV_SEEDS)} shuffles, + semantic feature...")
-    lr_semantic = repeated_cross_validate(df, y_original)
+    lr_semantic = repeated_cross_validate(df, y_original, groups=groups)
     print(f"Cross-validating across {len(CV_SEEDS)} shuffles, + description features...")
-    lr_description = repeated_cross_validate(without_cosine, y_original, use_description=True)
+    lr_description = repeated_cross_validate(without_cosine, y_original, use_description=True, groups=groups)
 
     rows: list[tuple[str, list[np.ndarray]]] = [
         ("Logistic regression (hand-crafted)", lr_base["oof_scores"]),

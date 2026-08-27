@@ -228,21 +228,29 @@ has made. Precision@k remains the headline so earlier results stay comparable.
 
 ## Results
 
-All methods scored on the same **574 labeled postings, 82 rated "yes"**, out-of-fold for the
+All methods scored on the same **545 distinct jobs, 79 rated "yes"**, out-of-fold for the
 trained model. Every number carries a 95% bootstrap interval over resampled postings, so the
 uncertainty means the same thing in every row.
 
+"Distinct jobs" rather than postings, because the same job arrives more than once: companies
+re-list expired roles under a fresh platform id, and sometimes submit one job twice at once
+under consecutive ids. Around a quarter of Magnet.me and SmartRecruiters postings sit in a
+duplicate group. Exact duplicates are collapsed to one row, and copies that differ only by city
+are kept apart but forced into the same cross-validation fold, so the model is never tested on a
+job it has already trained on. See [Duplicates](#duplicates-and-what-they-cost).
+
 ### The honest headline
 
-**At this sample size, no method is reliably better than any other.** The trained model, the
-embedding baseline and every feature variant sit inside each other's intervals on every metric.
+**No method is separated from another at the 95% level.** Every interval overlaps every other.
+What the data does support is a consistent *direction*, and the strongest of those is that
+reading the job description helps.
 
-| method | precision@10 | ndcg@10 | ndcg@20 |
-|---|---|---|---|
-| Logistic regression + description | **0.62** [0.20-0.90] | **0.77** [0.42-0.97] | 0.73 [0.51-0.89] |
-| Cosine similarity (untrained) | 0.58 [0.30-0.90] | **0.77** [0.49-0.96] | **0.75** [0.56-0.90] |
-| Logistic regression (hand-crafted) | 0.60 [0.30-0.90] | 0.74 [0.37-0.96] | 0.72 [0.49-0.88] |
-| Logistic regression + semantic | 0.59 [0.20-0.90] | 0.73 [0.37-0.97] | 0.71 [0.51-0.87] |
+| method | precision@10 | ndcg@10 |
+|---|---|---|
+| Logistic regression + description | **0.62** [0.30-0.90] | **0.77** [0.45-0.97] |
+| Cosine similarity (untrained) | 0.55 [0.20-0.90] | 0.75 [0.46-0.94] |
+| Logistic regression (hand-crafted) | 0.59 [0.20-0.90] | 0.72 [0.39-0.96] |
+| Logistic regression + semantic | 0.59 [0.30-0.90] | 0.72 [0.40-0.96] |
 
 precision@5 is omitted deliberately: its interval spans essentially [0.00-1.00], because it is
 computed from five postings. Any ranking of methods by precision@5 at this scale is noise.
@@ -254,29 +262,61 @@ by which postings the sample happened to contain, and every method faces that sa
 right test is paired: resample once, score both methods on the *same* postings, and look at the
 distribution of the difference.
 
-| comparison (ndcg@10) | mean difference | A ahead in |
-|---|---|---|
-| + description **vs** hand-crafted | +0.028 [-0.043, +0.099] | **79%** of resamples |
-| + description **vs** cosine similarity | +0.002 [-0.234, +0.279] | 48% of resamples |
-| hand-crafted **vs** cosine similarity | -0.026 [-0.298, +0.278] | 41% of resamples |
-| + semantic **vs** hand-crafted | -0.009 [-0.051, +0.033] | **33%** of resamples |
+| comparison | ndcg@5 | ndcg@10 | ndcg@20 |
+|---|---|---|---|
+| + description **vs** hand-crafted | **90%** | **85%** | **78%** |
+| + description **vs** cosine similarity | 52% | 54% | 49% |
+| hand-crafted **vs** cosine similarity | 39% | 41% | 41% |
+| + semantic **vs** hand-crafted | 37% | 42% | **19%** |
+
+<sub>Share of 2000 paired bootstrap resamples where the first method scored higher. 50% is a
+coin flip. None of these clears 95%, so all are directions rather than proofs.</sub>
 
 Four findings, in descending order of confidence:
 
-1. **The description features are consistently but not conclusively positive.** Ahead of the
-   plain model in 73-79% of resamples across all three NDCG cutoffs. A real direction, well
-   short of the 95% that would settle it, which is why they ship behind `--description` rather
-   than on by default.
-2. **The semantic feature does not help, and mildly hurts.** It trails the plain hand-crafted
-   model in two thirds of resamples (33% ahead on ndcg@10, 23% on precision@10). This
-   *contradicts* the earlier result below, and is the clearest example of why the measurement
-   changes mattered.
-3. **On hand-crafted features alone, the model is still modestly behind cosine similarity.**
-   Ahead in only 41% of resamples on ndcg@10, 34% on ndcg@5. Directionally the same conclusion
-   Round 1 reached, and it survives the better measurement.
-4. **With description features it draws level.** 48% of resamples against cosine, a coin flip.
-   So the gap that the semantic feature was introduced to close does get closed, just by a
-   different feature than the original write-up credited.
+1. **Reading the description is the one thing that clearly helps.** Ahead of the plain model in
+   78-90% of resamples across all three NDCG cutoffs, peaking at 90% for ndcg@5. Short of the
+   95% that would settle it, which is why it still ships behind `--description`, but it is the
+   only feature experiment here pointing consistently in one direction.
+2. **The semantic feature does not help, and mildly hurts.** Ahead in 19% of resamples at
+   ndcg@20, 37% at ndcg@5. It *contradicts* the earlier result below, and is the clearest
+   example of why the measurement changes mattered: it was the model's single largest
+   coefficient throughout.
+3. **On hand-crafted features alone, the model stays modestly behind cosine similarity.**
+   Ahead in 39-41% of resamples. Directionally the same conclusion Round 1 reached at 509
+   labels on a single split, and it survives every subsequent correction.
+4. **With description features it edges past cosine**, 52-54% at k=5 and 10, which is close
+   enough to a coin flip to be honest about. So the gap does close, just by a different feature
+   than the original write-up credited.
+
+### Duplicates, and what they cost
+
+Roughly a quarter of Magnet.me and SmartRecruiters postings are duplicates, for two reasons
+`external_id` structurally cannot catch. A company re-lists an expired job and the platform
+issues a **fresh posting id**, or it submits the same job **twice at once** under consecutive
+ids, one tagged with a city and one without. `external_id` catches the same job resurfacing at a
+new URL, which is a different problem.
+
+That cost twice over. The model saw a duplicated job several times in training, so it counted
+several times. And in cross-validation the copies could land in different folds, letting it
+score a test posting it had effectively memorised, which inflates precision@k exactly where it
+is read.
+
+It also produced contradictory labels: 10 jobs had been rated inconsistently across 21 rows,
+and 9 of the 10 were a July rating against an August one. That is preference drift over five
+weeks rather than carelessness, and it sets a ceiling: no ranker can be more consistent with you
+than you are with yourself. Resolving them algorithmically was tempting and wrong, since
+majority vote decides only 4 of 17 conflicts and every tie-break beyond that invents a label
+nobody chose, so `labeling.cli --fix-conflicts` asks instead.
+
+The fix is two-part, because the two duplicate kinds want opposite treatment. Exact duplicates
+(same title, company **and** location) collapse to one row. Copies differing only by city stay
+as separate rows, since rating a role differently in Paris and London is a preference not an
+error, but they are forced into the same cross-validation fold via `StratifiedGroupKFold`,
+because their descriptions are near-identical and leak just as badly.
+
+Worth stating plainly: cleaning this up moved every headline number by less than its own noise
+band. The leakage was real and worth removing, and it was not what was holding the results back.
 
 ### What this replaced, and why it is worth showing
 
