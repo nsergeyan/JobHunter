@@ -25,22 +25,24 @@ ranking model → a rigorous benchmark against two untrained baselines.
   jumped from 0.60 to 0.80. Then I rebuilt the measurement, and **most of that result did not
   survive it**:
 
-  | 574 labeled, 82 rated "yes" | ndcg@10, 95% interval | paired vs hand-crafted |
-  |---|---|---|
-  | Logistic regression **+ description** | 0.77 [0.42-0.97] | ahead in **79%** of resamples |
-  | Cosine similarity (untrained baseline) | 0.77 [0.49-0.96] | ahead in **60%** |
-  | Logistic regression, hand-crafted only | 0.74 [0.37-0.96] | - |
-  | Logistic regression **+ semantic feature** | 0.73 [0.37-0.97] | ahead in **33%** |
+  | 545 distinct jobs, 79 rated "yes" | ndcg@10, 95% interval |
+  |---|---|
+  | Logistic regression **+ description** | 0.77 [0.45-0.97] |
+  | Cosine similarity (untrained baseline) | 0.75 [0.46-0.94] |
+  | Logistic regression, hand-crafted only | 0.72 [0.39-0.96] |
+  | Logistic regression **+ semantic feature** | 0.72 [0.40-0.96] |
 
-  The semantic feature was the model's largest coefficient and still did not improve the
-  ranking. Nothing here separates from anything else at this sample size. See
-  [Results](#results).
-- **The measurement was the real work.** Three defects, each of which had inflated the earlier
-  numbers: the evaluation was not reproducible (unordered SQL rows fed the fold shuffle, so two
-  identical runs disagreed), one shuffle is a lottery (precision@5 swings across a band 0.36
-  wide), and comparing methods by eyeballing overlapping intervals is simply the wrong test
-  (a **paired bootstrap** on the same resampled postings is). Fixing all three *lowered* the
-  headline numbers and dissolved the original conclusion, which is the point.
+  Nothing separates from anything else, and the ordering itself is unstable: changing 6.6% of
+  the labels flips "+ description beats hand-crafted" from 11% of resamples to 90%. See
+  [the instability finding](#the-finding-that-matters-none-of-this-is-stable), which is the
+  real result here.
+- **The measurement was the real work.** Four defects, each of which had inflated or distorted
+  the earlier numbers: the evaluation was not reproducible (unordered SQL rows fed the fold
+  shuffle, so two identical runs disagreed); one shuffle is a lottery (precision@5 swings across
+  a band 0.36 wide); comparing methods by eyeballing overlapping intervals is the wrong test (a
+  **paired bootstrap** on the same resampled postings is); and duplicated jobs leaked between
+  training and test folds. The fifth, that the labeled set is small and non-randomly grown, is
+  not fixable by better statistics and is the finding above.
 - **Why the trained model is the one that matters.** The cosine baseline ranks by similarity
   to a profile I wrote by hand, so it can never learn from my actual decisions. The trained
   model did: it learned to *reject* `data engineer` despite reading almost identically to
@@ -272,22 +274,41 @@ distribution of the difference.
 <sub>Share of 2000 paired bootstrap resamples where the first method scored higher. 50% is a
 coin flip. None of these clears 95%, so all are directions rather than proofs.</sub>
 
-Four findings, in descending order of confidence:
+Read naively, that table says the description features are a clear win at 78-90%. **They are
+not, and the next section is the most important result in this project.**
 
-1. **Reading the description is the one thing that clearly helps.** Ahead of the plain model in
-   78-90% of resamples across all three NDCG cutoffs, peaking at 90% for ndcg@5. Short of the
-   95% that would settle it, which is why it still ships behind `--description`, but it is the
-   only feature experiment here pointing consistently in one direction.
-2. **The semantic feature does not help, and mildly hurts.** Ahead in 19% of resamples at
-   ndcg@20, 37% at ndcg@5. It *contradicts* the earlier result below, and is the clearest
-   example of why the measurement changes mattered: it was the model's single largest
-   coefficient throughout.
-3. **On hand-crafted features alone, the model stays modestly behind cosine similarity.**
-   Ahead in 39-41% of resamples. Directionally the same conclusion Round 1 reached at 509
-   labels on a single split, and it survives every subsequent correction.
-4. **With description features it edges past cosine**, 52-54% at k=5 and 10, which is close
-   enough to a coin flip to be honest about. So the gap does close, just by a different feature
-   than the original write-up credited.
+### The finding that matters: none of this is stable
+
+The table above was computed at 545 jobs. Re-running the identical code against the labeled set
+as it stood a few hours earlier, before 9 labels were corrected and 27 added, gives the opposite
+answer:
+
+| labeled set | "+ description beats hand-crafted", ndcg@5 |
+|---|---|
+| as of 12:22 (583 labels) | **11%** of resamples |
+| + 9 corrected labels | 34% |
+| + 27 newly labeled postings (610) | **90%** |
+
+**36 label changes, 6.6% of the dataset, moved the conclusion from "clearly worse" to "clearly
+better".** A result that fragile is not a result. It is noise that happens to have a direction
+on the day you look.
+
+Two things follow, and both were invisible until this was checked:
+
+**The bootstrap was measuring the wrong uncertainty.** It resamples which postings land in the
+*evaluation*, treating the labeled set as fixed. But the labeled set is itself a small, growing
+sample, and the variance from *which postings got labeled at all* dwarfs the variance the
+bootstrap reports. The intervals above are real, and they are not the whole story.
+
+**The new labels were not randomly chosen.** 24 of those 27 came from the uncertainty sampler,
+which deliberately selects postings the model is least sure about, and those are precisely the
+cases where two feature sets disagree most. So the additions systematically favour whichever
+variant handles boundary cases better. That is the exact bias `ranking/holdout.py` exists to
+guard against, appearing within hours of the sampler being switched on.
+
+The honest conclusion at this sample size: **the trained model, the embedding baseline and every
+feature variant are indistinguishable, and feature comparisons should not be run again until the
+random holdout is large enough to evaluate on.** It currently holds 126 labels with 14 positives.
 
 ### Duplicates, and what they cost
 
