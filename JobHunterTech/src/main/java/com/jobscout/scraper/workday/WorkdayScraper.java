@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyRegistry;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JobPostingHtml;
 import com.jobscout.scraper.ScraperException;
@@ -37,26 +38,15 @@ public class WorkdayScraper extends BaseScraper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int PAGE_SIZE = 20;
 
-    // Grows by hand as more Workday-hosted companies are identified (find the
-    // tenant/site by visiting the company's careers page and reading its URL).
-    public static final List<WorkdayCompany> WORKDAY_COMPANIES = List.of(
-            new WorkdayCompany("Zendesk", "zendesk.wd1.myworkdayjobs.com", "zendesk", "zendesk"),
-            new WorkdayCompany("Workday", "workday.wd5.myworkdayjobs.com", "workday", "Workday"),
-            new WorkdayCompany("Samsung", "sec.wd3.myworkdayjobs.com", "sec", "Samsung_Careers"),
-            new WorkdayCompany("NVIDIA", "nvidia.wd5.myworkdayjobs.com", "nvidia", "NVIDIAExternalCareerSite"),
-            new WorkdayCompany("Philips", "philips.wd3.myworkdayjobs.com", "philips", "jobs-and-careers"),
-            new WorkdayCompany("Deutsche Bank", "db.wd3.myworkdayjobs.com", "db", "DBWebsite"),
-            new WorkdayCompany("AstraZeneca", "astrazeneca.wd3.myworkdayjobs.com", "astrazeneca", "Careers"),
-            new WorkdayCompany("Barclays", "barclays.wd3.myworkdayjobs.com", "barclays", "External_Career_Site_Barclays"),
-            new WorkdayCompany("ING", "ing.wd3.myworkdayjobs.com", "ing", "ICSGBLCOR"),
-            new WorkdayCompany("ASML", "asml.wd3.myworkdayjobs.com", "asml", "ASMLEXT1"),
-            new WorkdayCompany("Booking Holdings", "priceline.wd1.myworkdayjobs.com", "priceline", "BookingHoldings"));
-
     private final List<WorkdayCompany> companies;
     private final int pageSize;
 
     public WorkdayScraper(HttpFetcher fetcher) {
-        this(fetcher, WORKDAY_COMPANIES, PAGE_SIZE);
+        this(fetcher, CompanyRegistry.load("workday", entry -> new WorkdayCompany(
+                CompanyRegistry.requiredField(entry, "company"),
+                CompanyRegistry.requiredField(entry, "host"),
+                CompanyRegistry.requiredField(entry, "tenant"),
+                CompanyRegistry.requiredField(entry, "site"))), PAGE_SIZE);
     }
 
     public WorkdayScraper(HttpFetcher fetcher, List<WorkdayCompany> companies) {

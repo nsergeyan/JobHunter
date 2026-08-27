@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyRegistry;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.ScraperException;
 import com.jobscout.scraper.ScraperPatterns;
@@ -34,53 +35,12 @@ import java.util.List;
 public class AshbyScraper extends BaseScraper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    // Grows by hand as more Ashby-hosted companies are identified. Verify via
-    // api.ashbyhq.com/posting-api/job-board/{boardName} directly, not the HTML page.
-    public static final List<AshbyCompany> ASHBY_COMPANIES = List.of(
-            new AshbyCompany("OpenAI", "openai"),
-            new AshbyCompany("Snowflake", "snowflake"),
-            new AshbyCompany("Cohere", "cohere"),
-            new AshbyCompany("Perplexity", "perplexity"),
-            new AshbyCompany("Ramp", "ramp"),
-            new AshbyCompany("Linear", "linear"),
-            new AshbyCompany("Alan", "alan"),
-            new AshbyCompany("Voodoo", "voodoo"),
-            new AshbyCompany("UiPath", "uipath"),
-            new AshbyCompany("Notion", "notion"),
-            new AshbyCompany("Miro", "miro"),
-            new AshbyCompany("Hudson River Trading", "hrt"),
-            new AshbyCompany("Cubist", "cubist"),
-            new AshbyCompany("Bolt", "bolt"),
-            new AshbyCompany("Mollie", "mollie"),
-            new AshbyCompany("ClearBank", "clearbank"),
-            new AshbyCompany("ElevenLabs", "elevenlabs"),
-            new AshbyCompany("Sierra", "sierra"),
-            new AshbyCompany("Cursor", "cursor"),
-            new AshbyCompany("Pennylane", "pennylane"),
-            new AshbyCompany("Vanta", "vanta"),
-            new AshbyCompany("Supabase", "supabase"),
-            new AshbyCompany("Baseten", "baseten"),
-            new AshbyCompany("Temporal", "temporal"),
-            new AshbyCompany("Watershed", "watershed"),
-            new AshbyCompany("Attio", "attio"),
-            new AshbyCompany("Modal", "modal"),
-            new AshbyCompany("Render", "render"),
-            new AshbyCompany("Dust", "dust"),
-            new AshbyCompany("Photoroom", "photoroom"),
-            new AshbyCompany("Lovable", "lovable"),
-            new AshbyCompany("Harvey", "harvey"),
-            new AshbyCompany("Synthesia", "synthesia"),
-            new AshbyCompany("Decagon", "decagon"),
-            new AshbyCompany("Cognition AI", "cognition"),
-            new AshbyCompany("Runway", "runway"),
-            new AshbyCompany("Anyscale", "anyscale"),
-            new AshbyCompany("LangChain", "langchain"),
-            new AshbyCompany("Pinecone", "pinecone"));
-
     private final List<AshbyCompany> companies;
 
     public AshbyScraper(HttpFetcher fetcher) {
-        this(fetcher, ASHBY_COMPANIES);
+        this(fetcher, CompanyRegistry.load("ashby", entry -> new AshbyCompany(
+                CompanyRegistry.requiredField(entry, "company"),
+                CompanyRegistry.requiredField(entry, "boardName"))));
     }
 
     public AshbyScraper(HttpFetcher fetcher, List<AshbyCompany> companies) {

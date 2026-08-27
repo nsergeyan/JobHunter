@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyRegistry;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JobPostingHtml;
 import com.jobscout.scraper.ScraperException;
@@ -31,81 +32,12 @@ import java.util.List;
 public class GreenhouseScraper extends BaseScraper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    // Grows by hand as more Greenhouse-hosted companies are identified. Verify
-    // the boardToken by hitting boards-api.greenhouse.io/v1/boards/{token}/jobs
-    // directly -- it isn't always the same as the company's display name.
-    public static final List<GreenhouseCompany> GREENHOUSE_COMPANIES = List.of(
-            new GreenhouseCompany("Anthropic", "anthropic"),
-            new GreenhouseCompany("Scale AI", "scaleai"),
-            new GreenhouseCompany("Stripe", "stripe"),
-            new GreenhouseCompany("Datadog", "datadog"),
-            new GreenhouseCompany("Cloudflare", "cloudflare"),
-            new GreenhouseCompany("Airbnb", "airbnb"),
-            new GreenhouseCompany("Robinhood", "robinhood"),
-            new GreenhouseCompany("Squarespace", "squarespace"),
-            new GreenhouseCompany("Duolingo", "duolingo"),
-            new GreenhouseCompany("Coinbase", "coinbase"),
-            new GreenhouseCompany("Pinterest", "pinterest"),
-            new GreenhouseCompany("Roblox", "roblox"),
-            new GreenhouseCompany("Databricks", "databricks"),
-            new GreenhouseCompany("Figma", "figma"),
-            new GreenhouseCompany("DeepMind", "deepmind"),
-            new GreenhouseCompany("Discord", "discord"),
-            new GreenhouseCompany("Reddit", "reddit"),
-            new GreenhouseCompany("Instacart", "instacart"),
-            new GreenhouseCompany("DoorDash", "doordashusa"),
-            new GreenhouseCompany("Affirm", "affirm"),
-            new GreenhouseCompany("Brex", "brex"),
-            new GreenhouseCompany("Vercel", "vercel"),
-            new GreenhouseCompany("Asana", "asana"),
-            new GreenhouseCompany("Doctolib", "doctolib"),
-            new GreenhouseCompany("Celonis", "celonis"),
-            new GreenhouseCompany("N26", "n26"),
-            new GreenhouseCompany("Adyen", "adyen"),
-            new GreenhouseCompany("Dropbox", "dropbox"),
-            new GreenhouseCompany("Twilio", "twilio"),
-            new GreenhouseCompany("Lyft", "lyft"),
-            new GreenhouseCompany("Okta", "okta"),
-            new GreenhouseCompany("Jane Street", "janestreet"),
-            new GreenhouseCompany("IMC Trading", "imc"),
-            new GreenhouseCompany("Jump Trading", "jumptrading"),
-            new GreenhouseCompany("Point72", "point72"),
-            new GreenhouseCompany("MongoDB", "mongodb"),
-            new GreenhouseCompany("GetYourGuide", "getyourguide"),
-            new GreenhouseCompany("GitLab", "gitlab"),
-            new GreenhouseCompany("Elastic", "elastic"),
-            new GreenhouseCompany("Monzo", "monzo"),
-            new GreenhouseCompany("Optiver", "optiver"),
-            new GreenhouseCompany("TrueLayer", "truelayer"),
-            new GreenhouseCompany("GoCardless", "gocardless"),
-            new GreenhouseCompany("Form3", "form3"),
-            new GreenhouseCompany("Trustpilot", "trustpilot"),
-            new GreenhouseCompany("Wolt", "wolt"),
-            new GreenhouseCompany("Samsara", "samsara"),
-            new GreenhouseCompany("Klaviyo", "klaviyo"),
-            new GreenhouseCompany("Airtable", "airtable"),
-            new GreenhouseCompany("Toast", "toast"),
-            new GreenhouseCompany("Contentful", "contentful"),
-            new GreenhouseCompany("Algolia", "algolia"),
-            new GreenhouseCompany("Typeform", "typeform"),
-            new GreenhouseCompany("FreeNow", "freenow"),
-            new GreenhouseCompany("Cabify", "cabify"),
-            new GreenhouseCompany("Pleo", "pleo"),
-            new GreenhouseCompany("Dashlane", "dashlane"),
-            new GreenhouseCompany("SumUp", "sumup"),
-            new GreenhouseCompany("Bitpanda", "bitpanda"),
-            new GreenhouseCompany("Wayve", "wayve"),
-            new GreenhouseCompany("HelloFresh", "hellofresh"),
-            new GreenhouseCompany("Grafana Labs", "grafanalabs"),
-            new GreenhouseCompany("CoreWeave", "coreweave"),
-            new GreenhouseCompany("Together AI", "togetherai"),
-            new GreenhouseCompany("Postman", "postman"),
-            new GreenhouseCompany("Imbue", "imbue"));
-
     private final List<GreenhouseCompany> companies;
 
     public GreenhouseScraper(HttpFetcher fetcher) {
-        this(fetcher, GREENHOUSE_COMPANIES);
+        this(fetcher, CompanyRegistry.load("greenhouse", entry -> new GreenhouseCompany(
+                CompanyRegistry.requiredField(entry, "company"),
+                CompanyRegistry.requiredField(entry, "boardToken"))));
     }
 
     public GreenhouseScraper(HttpFetcher fetcher, List<GreenhouseCompany> companies) {

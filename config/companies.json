@@ -1,0 +1,609 @@
+{
+  "_readme": [
+    "Company lists for each ATS platform. Edited by hand, read at runtime by",
+    "CompanyRegistry, so adding a company needs no recompile. Keys starting with",
+    "an underscore are ignored by the loader.",
+    "Every entry needs a display 'company' name plus that platform's own identifier.",
+    "Verify a new identifier against the real API before adding it: a plausible",
+    "looking slug can 404, or worse, silently resolve to an unrelated company."
+  ],
+  "_identifiers": {
+    "greenhouse": "boardToken, the slug in boards-api.greenhouse.io/v1/boards/{boardToken}/jobs. Often but not always the company name.",
+    "workday": "host, tenant and site. Visit the careers page: the API host gives the tenant, and {host}/en-US/{site} gives the site slug, which is usually but not always the tenant.",
+    "ashby": "boardName, the slug in api.ashbyhq.com/posting-api/job-board/{boardName}. Ashby careers pages return 200 for any slug, real or not, so confirm against the API and not the HTML page.",
+    "lever": "siteToken, the slug in api.lever.co/v0/postings/{siteToken}.",
+    "smartrecruiters": "companyIdentifier, the slug in api.smartrecruiters.com/v1/companies/{companyIdentifier}/postings. Confirm with a real totalFound count, since a wrong slug can return 0 with no error."
+  },
+  "greenhouse": [
+    {
+      "company": "Anthropic",
+      "boardToken": "anthropic"
+    },
+    {
+      "company": "Scale AI",
+      "boardToken": "scaleai"
+    },
+    {
+      "company": "Stripe",
+      "boardToken": "stripe"
+    },
+    {
+      "company": "Datadog",
+      "boardToken": "datadog"
+    },
+    {
+      "company": "Cloudflare",
+      "boardToken": "cloudflare"
+    },
+    {
+      "company": "Airbnb",
+      "boardToken": "airbnb"
+    },
+    {
+      "company": "Robinhood",
+      "boardToken": "robinhood"
+    },
+    {
+      "company": "Squarespace",
+      "boardToken": "squarespace"
+    },
+    {
+      "company": "Duolingo",
+      "boardToken": "duolingo"
+    },
+    {
+      "company": "Coinbase",
+      "boardToken": "coinbase"
+    },
+    {
+      "company": "Pinterest",
+      "boardToken": "pinterest"
+    },
+    {
+      "company": "Roblox",
+      "boardToken": "roblox"
+    },
+    {
+      "company": "Databricks",
+      "boardToken": "databricks"
+    },
+    {
+      "company": "Figma",
+      "boardToken": "figma"
+    },
+    {
+      "company": "DeepMind",
+      "boardToken": "deepmind"
+    },
+    {
+      "company": "Discord",
+      "boardToken": "discord"
+    },
+    {
+      "company": "Reddit",
+      "boardToken": "reddit"
+    },
+    {
+      "company": "Instacart",
+      "boardToken": "instacart"
+    },
+    {
+      "company": "DoorDash",
+      "boardToken": "doordashusa"
+    },
+    {
+      "company": "Affirm",
+      "boardToken": "affirm"
+    },
+    {
+      "company": "Brex",
+      "boardToken": "brex"
+    },
+    {
+      "company": "Vercel",
+      "boardToken": "vercel"
+    },
+    {
+      "company": "Asana",
+      "boardToken": "asana"
+    },
+    {
+      "company": "Doctolib",
+      "boardToken": "doctolib"
+    },
+    {
+      "company": "Celonis",
+      "boardToken": "celonis"
+    },
+    {
+      "company": "N26",
+      "boardToken": "n26"
+    },
+    {
+      "company": "Adyen",
+      "boardToken": "adyen"
+    },
+    {
+      "company": "Dropbox",
+      "boardToken": "dropbox"
+    },
+    {
+      "company": "Twilio",
+      "boardToken": "twilio"
+    },
+    {
+      "company": "Lyft",
+      "boardToken": "lyft"
+    },
+    {
+      "company": "Okta",
+      "boardToken": "okta"
+    },
+    {
+      "company": "Jane Street",
+      "boardToken": "janestreet"
+    },
+    {
+      "company": "IMC Trading",
+      "boardToken": "imc"
+    },
+    {
+      "company": "Jump Trading",
+      "boardToken": "jumptrading"
+    },
+    {
+      "company": "Point72",
+      "boardToken": "point72"
+    },
+    {
+      "company": "MongoDB",
+      "boardToken": "mongodb"
+    },
+    {
+      "company": "GetYourGuide",
+      "boardToken": "getyourguide"
+    },
+    {
+      "company": "GitLab",
+      "boardToken": "gitlab"
+    },
+    {
+      "company": "Elastic",
+      "boardToken": "elastic"
+    },
+    {
+      "company": "Monzo",
+      "boardToken": "monzo"
+    },
+    {
+      "company": "Optiver",
+      "boardToken": "optiver"
+    },
+    {
+      "company": "TrueLayer",
+      "boardToken": "truelayer"
+    },
+    {
+      "company": "GoCardless",
+      "boardToken": "gocardless"
+    },
+    {
+      "company": "Form3",
+      "boardToken": "form3"
+    },
+    {
+      "company": "Trustpilot",
+      "boardToken": "trustpilot"
+    },
+    {
+      "company": "Wolt",
+      "boardToken": "wolt"
+    },
+    {
+      "company": "Samsara",
+      "boardToken": "samsara"
+    },
+    {
+      "company": "Klaviyo",
+      "boardToken": "klaviyo"
+    },
+    {
+      "company": "Airtable",
+      "boardToken": "airtable"
+    },
+    {
+      "company": "Toast",
+      "boardToken": "toast"
+    },
+    {
+      "company": "Contentful",
+      "boardToken": "contentful"
+    },
+    {
+      "company": "Algolia",
+      "boardToken": "algolia"
+    },
+    {
+      "company": "Typeform",
+      "boardToken": "typeform"
+    },
+    {
+      "company": "FreeNow",
+      "boardToken": "freenow"
+    },
+    {
+      "company": "Cabify",
+      "boardToken": "cabify"
+    },
+    {
+      "company": "Pleo",
+      "boardToken": "pleo"
+    },
+    {
+      "company": "Dashlane",
+      "boardToken": "dashlane"
+    },
+    {
+      "company": "SumUp",
+      "boardToken": "sumup"
+    },
+    {
+      "company": "Bitpanda",
+      "boardToken": "bitpanda"
+    },
+    {
+      "company": "Wayve",
+      "boardToken": "wayve"
+    },
+    {
+      "company": "HelloFresh",
+      "boardToken": "hellofresh"
+    },
+    {
+      "company": "Grafana Labs",
+      "boardToken": "grafanalabs"
+    },
+    {
+      "company": "CoreWeave",
+      "boardToken": "coreweave"
+    },
+    {
+      "company": "Together AI",
+      "boardToken": "togetherai"
+    },
+    {
+      "company": "Postman",
+      "boardToken": "postman"
+    },
+    {
+      "company": "Imbue",
+      "boardToken": "imbue"
+    }
+  ],
+  "workday": [
+    {
+      "company": "Zendesk",
+      "host": "zendesk.wd1.myworkdayjobs.com",
+      "tenant": "zendesk",
+      "site": "zendesk"
+    },
+    {
+      "company": "Workday",
+      "host": "workday.wd5.myworkdayjobs.com",
+      "tenant": "workday",
+      "site": "Workday"
+    },
+    {
+      "company": "Samsung",
+      "host": "sec.wd3.myworkdayjobs.com",
+      "tenant": "sec",
+      "site": "Samsung_Careers"
+    },
+    {
+      "company": "NVIDIA",
+      "host": "nvidia.wd5.myworkdayjobs.com",
+      "tenant": "nvidia",
+      "site": "NVIDIAExternalCareerSite"
+    },
+    {
+      "company": "Philips",
+      "host": "philips.wd3.myworkdayjobs.com",
+      "tenant": "philips",
+      "site": "jobs-and-careers"
+    },
+    {
+      "company": "Deutsche Bank",
+      "host": "db.wd3.myworkdayjobs.com",
+      "tenant": "db",
+      "site": "DBWebsite"
+    },
+    {
+      "company": "AstraZeneca",
+      "host": "astrazeneca.wd3.myworkdayjobs.com",
+      "tenant": "astrazeneca",
+      "site": "Careers"
+    },
+    {
+      "company": "Barclays",
+      "host": "barclays.wd3.myworkdayjobs.com",
+      "tenant": "barclays",
+      "site": "External_Career_Site_Barclays"
+    },
+    {
+      "company": "ING",
+      "host": "ing.wd3.myworkdayjobs.com",
+      "tenant": "ing",
+      "site": "ICSGBLCOR"
+    },
+    {
+      "company": "ASML",
+      "host": "asml.wd3.myworkdayjobs.com",
+      "tenant": "asml",
+      "site": "ASMLEXT1"
+    },
+    {
+      "company": "Booking Holdings",
+      "host": "priceline.wd1.myworkdayjobs.com",
+      "tenant": "priceline",
+      "site": "BookingHoldings"
+    }
+  ],
+  "ashby": [
+    {
+      "company": "OpenAI",
+      "boardName": "openai"
+    },
+    {
+      "company": "Snowflake",
+      "boardName": "snowflake"
+    },
+    {
+      "company": "Cohere",
+      "boardName": "cohere"
+    },
+    {
+      "company": "Perplexity",
+      "boardName": "perplexity"
+    },
+    {
+      "company": "Ramp",
+      "boardName": "ramp"
+    },
+    {
+      "company": "Linear",
+      "boardName": "linear"
+    },
+    {
+      "company": "Alan",
+      "boardName": "alan"
+    },
+    {
+      "company": "Voodoo",
+      "boardName": "voodoo"
+    },
+    {
+      "company": "UiPath",
+      "boardName": "uipath"
+    },
+    {
+      "company": "Notion",
+      "boardName": "notion"
+    },
+    {
+      "company": "Miro",
+      "boardName": "miro"
+    },
+    {
+      "company": "Hudson River Trading",
+      "boardName": "hrt"
+    },
+    {
+      "company": "Cubist",
+      "boardName": "cubist"
+    },
+    {
+      "company": "Bolt",
+      "boardName": "bolt"
+    },
+    {
+      "company": "Mollie",
+      "boardName": "mollie"
+    },
+    {
+      "company": "ClearBank",
+      "boardName": "clearbank"
+    },
+    {
+      "company": "ElevenLabs",
+      "boardName": "elevenlabs"
+    },
+    {
+      "company": "Sierra",
+      "boardName": "sierra"
+    },
+    {
+      "company": "Cursor",
+      "boardName": "cursor"
+    },
+    {
+      "company": "Pennylane",
+      "boardName": "pennylane"
+    },
+    {
+      "company": "Vanta",
+      "boardName": "vanta"
+    },
+    {
+      "company": "Supabase",
+      "boardName": "supabase"
+    },
+    {
+      "company": "Baseten",
+      "boardName": "baseten"
+    },
+    {
+      "company": "Temporal",
+      "boardName": "temporal"
+    },
+    {
+      "company": "Watershed",
+      "boardName": "watershed"
+    },
+    {
+      "company": "Attio",
+      "boardName": "attio"
+    },
+    {
+      "company": "Modal",
+      "boardName": "modal"
+    },
+    {
+      "company": "Render",
+      "boardName": "render"
+    },
+    {
+      "company": "Dust",
+      "boardName": "dust"
+    },
+    {
+      "company": "Photoroom",
+      "boardName": "photoroom"
+    },
+    {
+      "company": "Lovable",
+      "boardName": "lovable"
+    },
+    {
+      "company": "Harvey",
+      "boardName": "harvey"
+    },
+    {
+      "company": "Synthesia",
+      "boardName": "synthesia"
+    },
+    {
+      "company": "Decagon",
+      "boardName": "decagon"
+    },
+    {
+      "company": "Cognition AI",
+      "boardName": "cognition"
+    },
+    {
+      "company": "Runway",
+      "boardName": "runway"
+    },
+    {
+      "company": "Anyscale",
+      "boardName": "anyscale"
+    },
+    {
+      "company": "LangChain",
+      "boardName": "langchain"
+    },
+    {
+      "company": "Pinecone",
+      "boardName": "pinecone"
+    }
+  ],
+  "lever": [
+    {
+      "company": "Mistral AI",
+      "siteToken": "mistral"
+    },
+    {
+      "company": "Palantir",
+      "siteToken": "palantir"
+    },
+    {
+      "company": "Spotify",
+      "siteToken": "spotify"
+    },
+    {
+      "company": "Aircall",
+      "siteToken": "aircall"
+    },
+    {
+      "company": "Qonto",
+      "siteToken": "qonto"
+    },
+    {
+      "company": "Malt",
+      "siteToken": "malt"
+    },
+    {
+      "company": "Atlassian",
+      "siteToken": "atlassian"
+    },
+    {
+      "company": "Agicap",
+      "siteToken": "agicap"
+    },
+    {
+      "company": "Contentsquare",
+      "siteToken": "contentsquare"
+    },
+    {
+      "company": "Swile",
+      "siteToken": "swile"
+    },
+    {
+      "company": "Zopa",
+      "siteToken": "zopa"
+    },
+    {
+      "company": "Doctrine",
+      "siteToken": "doctrine"
+    },
+    {
+      "company": "Deliverect",
+      "siteToken": "deliverect"
+    },
+    {
+      "company": "BlaBlaCar",
+      "siteToken": "blablacar"
+    },
+    {
+      "company": "Brevo",
+      "siteToken": "brevo"
+    }
+  ],
+  "smartrecruiters": [
+    {
+      "company": "Delivery Hero",
+      "companyIdentifier": "deliveryhero"
+    },
+    {
+      "company": "Wise",
+      "companyIdentifier": "wise"
+    },
+    {
+      "company": "Bosch",
+      "companyIdentifier": "BoschGroup"
+    },
+    {
+      "company": "ServiceNow",
+      "companyIdentifier": "servicenow"
+    },
+    {
+      "company": "Canva",
+      "companyIdentifier": "canva"
+    },
+    {
+      "company": "Continental",
+      "companyIdentifier": "Continental"
+    },
+    {
+      "company": "NielsenIQ",
+      "companyIdentifier": "nielsenIQ"
+    },
+    {
+      "company": "Visa",
+      "companyIdentifier": "visa"
+    },
+    {
+      "company": "Thales",
+      "companyIdentifier": "Thales"
+    }
+  ]
+}

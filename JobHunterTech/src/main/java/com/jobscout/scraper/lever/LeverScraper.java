@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyRegistry;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JobPostingHtml;
 import com.jobscout.scraper.ScraperException;
@@ -34,29 +35,12 @@ import java.util.List;
 public class LeverScraper extends BaseScraper {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    // Grows by hand as more Lever-hosted companies are identified. Verify via
-    // api.lever.co/v0/postings/{siteToken}?mode=json directly.
-    public static final List<LeverCompany> LEVER_COMPANIES = List.of(
-            new LeverCompany("Mistral AI", "mistral"),
-            new LeverCompany("Palantir", "palantir"),
-            new LeverCompany("Spotify", "spotify"),
-            new LeverCompany("Aircall", "aircall"),
-            new LeverCompany("Qonto", "qonto"),
-            new LeverCompany("Malt", "malt"),
-            new LeverCompany("Atlassian", "atlassian"),
-            new LeverCompany("Agicap", "agicap"),
-            new LeverCompany("Contentsquare", "contentsquare"),
-            new LeverCompany("Swile", "swile"),
-            new LeverCompany("Zopa", "zopa"),
-            new LeverCompany("Doctrine", "doctrine"),
-            new LeverCompany("Deliverect", "deliverect"),
-            new LeverCompany("BlaBlaCar", "blablacar"),
-            new LeverCompany("Brevo", "brevo"));
-
     private final List<LeverCompany> companies;
 
     public LeverScraper(HttpFetcher fetcher) {
-        this(fetcher, LEVER_COMPANIES);
+        this(fetcher, CompanyRegistry.load("lever", entry -> new LeverCompany(
+                CompanyRegistry.requiredField(entry, "company"),
+                CompanyRegistry.requiredField(entry, "siteToken"))));
     }
 
     public LeverScraper(HttpFetcher fetcher, List<LeverCompany> companies) {

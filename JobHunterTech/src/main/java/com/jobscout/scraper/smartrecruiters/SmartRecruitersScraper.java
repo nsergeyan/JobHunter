@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyRegistry;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JobPostingHtml;
 import com.jobscout.scraper.ScraperException;
@@ -40,23 +41,13 @@ public class SmartRecruitersScraper extends BaseScraper {
     private static final Set<String> EXCLUDED_EXPERIENCE_LEVELS = Set.of(
             "mid_senior_level", "director", "executive");
 
-    // Grows by hand as more SmartRecruiters-hosted companies are identified.
-    public static final List<SmartRecruitersCompany> SMARTRECRUITERS_COMPANIES = List.of(
-            new SmartRecruitersCompany("Delivery Hero", "deliveryhero"),
-            new SmartRecruitersCompany("Wise", "wise"),
-            new SmartRecruitersCompany("Bosch", "BoschGroup"),
-            new SmartRecruitersCompany("ServiceNow", "servicenow"),
-            new SmartRecruitersCompany("Canva", "canva"),
-            new SmartRecruitersCompany("Continental", "Continental"),
-            new SmartRecruitersCompany("NielsenIQ", "nielsenIQ"),
-            new SmartRecruitersCompany("Visa", "visa"),
-            new SmartRecruitersCompany("Thales", "Thales"));
-
     private final List<SmartRecruitersCompany> companies;
     private final int pageSize;
 
     public SmartRecruitersScraper(HttpFetcher fetcher) {
-        this(fetcher, SMARTRECRUITERS_COMPANIES, PAGE_SIZE);
+        this(fetcher, CompanyRegistry.load("smartrecruiters", entry -> new SmartRecruitersCompany(
+                CompanyRegistry.requiredField(entry, "company"),
+                CompanyRegistry.requiredField(entry, "companyIdentifier"))), PAGE_SIZE);
     }
 
     public SmartRecruitersScraper(HttpFetcher fetcher, List<SmartRecruitersCompany> companies) {
