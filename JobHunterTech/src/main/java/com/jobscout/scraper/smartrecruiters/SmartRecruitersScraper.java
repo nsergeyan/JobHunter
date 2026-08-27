@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyScrape;
 import com.jobscout.scraper.CompanyRegistry;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JobPostingHtml;
@@ -130,46 +131,67 @@ public class SmartRecruitersScraper extends BaseScraper {
     public int run(Connection conn) {
         int count = 0;
         for (SmartRecruitersCompany company : companies) {
-            for (JobListing listing : fetchCandidateJobs(company)) {
-                // Already evaluated (accepted or rejected) on a previous run -- skip the
-                // detail fetch entirely rather than re-requesting and re-filtering it.
-                if (alreadyEvaluated(conn, listing.id())) {
-                    continue;
-                }
-
-                JsonNode detail;
+            try (CompanyScrape scrape = beginPartialListing(conn, company.company())) {
+                List<JobListing> listings;
                 try {
-                    detail = fetchDetail(company, listing);
+                    // Hoisted out of the for-each header, where a failure propagated
+                    // straight out of run() and abandoned every remaining company.
+                    listings = fetchCandidateJobs(company);
                 } catch (ScraperException exc) {
-                    System.out.println("Skipping " + company.company() + " " + listing.id() + ": " + exc.getMessage());
+                    scrape.failed(exc.getMessage());
+                    System.out.println("Skipping " + company.company() + ": " + exc.getMessage());
                     continue;
                 }
 
-                if (!isInTargetRegion(detail)) {
-                    System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe");
-                    recordEvaluation(conn, listing.id(), false);
-                    continue;
-                }
+                for (JobListing listing : listings) {
+                    scrape.listed(listing.id());
+                    // Already evaluated (accepted or rejected) on a previous run -- skip the
+                    // detail fetch entirely rather than re-requesting and re-filtering it.
+                    if (alreadyEvaluated(conn, listing.id())) {
+                        continue;
+                    }
 
-                String description = descriptionText(detail);
-                if (SeniorityFilter.isSeniorRole(description)) {
-                    System.out.println("Skipping " + company.company() + " \"" + listing.title()
-                            + "\": description indicates a senior role");
-                    recordEvaluation(conn, listing.id(), false);
-                    continue;
-                }
+                    JsonNode detail;
+                    try {
+                        detail = fetchDetail(company, listing);
+                    } catch (ScraperException exc) {
+                        System.out.println("Skipping " + company.company() + " " + listing.id()
+                                + ": " + exc.getMessage());
+                        continue;
+                    }
 
-                if (SeniorityFilter.requiresTooMuchExperience(description)) {
-                    System.out.println("Skipping " + company.company() + " \"" + listing.title()
-                            + "\": requires more than 2 years of experience");
-                    recordEvaluation(conn, listing.id(), false);
-                    continue;
-                }
+                    if (!isInTargetRegion(detail)) {
+                        System.out.println("Skipping " + company.company() + " \"" + listing.title()
+                                + "\": outside Europe");
+                        recordEvaluation(conn, listing.id(), false);
+                        scrape.filteredOut();
+                        continue;
+                    }
 
-                VacancyRecord vacancy = toVacancy(company, listing, detail);
-                VacancyRepository.upsertVacancy(conn, vacancy);
-                recordEvaluation(conn, listing.id(), true);
-                count++;
+                    String description = descriptionText(detail);
+                    if (SeniorityFilter.isSeniorRole(description)) {
+                        System.out.println("Skipping " + company.company() + " \"" + listing.title()
+                                + "\": description indicates a senior role");
+                        recordEvaluation(conn, listing.id(), false);
+                        scrape.filteredOut();
+                        continue;
+                    }
+
+                    if (SeniorityFilter.requiresTooMuchExperience(description)) {
+                        System.out.println("Skipping " + company.company() + " \"" + listing.title()
+                                + "\": requires more than 2 years of experience");
+                        recordEvaluation(conn, listing.id(), false);
+                        scrape.filteredOut();
+                        continue;
+                    }
+
+                    VacancyRecord vacancy = toVacancy(company, listing, detail);
+                    VacancyRepository.upsertVacancy(conn, vacancy);
+                    recordEvaluation(conn, listing.id(), true);
+                    scrape.stored();
+                    count++;
+                }
+                scrape.listingComplete();
             }
         }
         return count;

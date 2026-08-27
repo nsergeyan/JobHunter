@@ -44,6 +44,7 @@ public final class SchemaInitializer {
             addColumnIfMissing(conn, "vacancy_extractions", "summary", "TEXT");
             addColumnIfMissing(conn, "vacancies", "external_id", "TEXT");
             addColumnIfMissing(conn, "seen_postings", "filter_version", "INTEGER");
+            addColumnIfMissing(conn, "vacancies", "closed_at", "TEXT");
             // Rows written before this column existed were judged by the filters as they
             // stood then, which is version 1 -- backfill instead of leaving them NULL, so
             // upgrading doesn't silently trigger a detail-fetch of every posting ever

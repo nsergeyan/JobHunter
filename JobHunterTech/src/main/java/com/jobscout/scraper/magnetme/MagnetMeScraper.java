@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyScrape;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.JobPostingHtml;
 import com.jobscout.scraper.ScraperException;
@@ -85,76 +86,113 @@ public class MagnetMeScraper extends BaseScraper {
         if (titleNode.isMissingNode()) {
             throw new NoSuchElementException("missing 'title'");
         }
-        Matcher idMatch = OPPORTUNITY_ID.matcher(url);
-        String externalId = idMatch.find() ? idMatch.group(1) : url;
+        String externalId = externalIdOf(url);
         return new VacancyRecord(sourceName(), externalId, url, titleNode.asText(), company, location, rawText);
+    }
+
+    /**
+     * Magnet.me has no separate posting id, so the opportunity number from the URL
+     * stands in for one. Needed by the scrape loop as well as toVacancy, which is
+     * why it lives here rather than inline.
+     */
+    static String externalIdOf(String url) {
+        Matcher idMatch = OPPORTUNITY_ID.matcher(url);
+        return idMatch.find() ? idMatch.group(1) : url;
     }
 
     public int run(Connection conn) {
         int count = 0;
-        for (String url : fetchCandidateUrls()) {
-            // Already evaluated (accepted or rejected) on a previous run -- skip the
-            // page fetch entirely. The sitemap can list thousands of URLs.
-            if (alreadyEvaluated(conn, url)) {
-                continue;
-            }
-
-            String html;
+        // Partial listing, so nothing is ever closed from this source: the sitemap
+        // spans many companies at once and the candidate URLs are already filtered by
+        // title, so a posting's absence from one pass is not evidence that it closed.
+        // company is null for the same reason -- it is a per-posting attribute here,
+        // not something this source is organised by.
+        try (CompanyScrape scrape = beginPartialListing(conn, null)) {
+            List<String> candidateUrls;
             try {
-                html = fetcher.get(url);
+                // Hoisted out of the for-each header, where a sitemap failure
+                // propagated straight out of run().
+                candidateUrls = fetchCandidateUrls();
             } catch (ScraperException exc) {
-                System.out.println("Skipping " + url + ": " + exc.getMessage());
-                continue;
+                scrape.failed(exc.getMessage());
+                System.out.println("Skipping Magnet.me: " + exc.getMessage());
+                return count;
             }
 
-            JsonNode posting = JobPostingHtml.extractJobPosting(html);
-            if (posting == null) {
-                System.out.println("Skipping " + url + ": no JobPosting data found on page");
-                recordEvaluation(conn, url, false);
-                continue;
-            }
+            for (String url : candidateUrls) {
+                scrape.listed(externalIdOf(url));
+                // Already evaluated (accepted or rejected) on a previous run -- skip the
+                // page fetch entirely. The sitemap can list thousands of URLs.
+                if (alreadyEvaluated(conn, url)) {
+                    continue;
+                }
 
-            String country = posting.path("jobLocation").path("address").path("addressCountry").asText(null);
-            if (country != null && !TargetRegion.isInScopeByCountryCode(country)) {
-                System.out.println("Skipping " + url + ": outside Europe (" + country + ")");
-                recordEvaluation(conn, url, false);
-                continue;
-            }
+                String html;
+                try {
+                    html = fetcher.get(url);
+                } catch (ScraperException exc) {
+                    System.out.println("Skipping " + url + ": " + exc.getMessage());
+                    continue;
+                }
 
-            List<String> requiredLanguages = extractRequiredLanguages(html);
-            boolean requiresDutch = requiredLanguages.stream()
-                    .anyMatch(lang -> lang.strip().equalsIgnoreCase("dutch"));
-            if (requiresDutch) {
-                System.out.println("Skipping " + url + ": requires Dutch (" + String.join(", ", requiredLanguages) + ")");
-                recordEvaluation(conn, url, false);
-                continue;
-            }
+                JsonNode posting = JobPostingHtml.extractJobPosting(html);
+                if (posting == null) {
+                    System.out.println("Skipping " + url + ": no JobPosting data found on page");
+                    recordEvaluation(conn, url, false);
+                    scrape.filteredOut();
+                    continue;
+                }
 
-            String rawText = JobPostingHtml.cleanDescription(posting);
-            if (SeniorityFilter.isSeniorRole(rawText)) {
-                System.out.println("Skipping " + url + ": description indicates a senior role");
-                recordEvaluation(conn, url, false);
-                continue;
-            }
+                String country = posting.path("jobLocation").path("address").path("addressCountry").asText(null);
+                if (country != null && !TargetRegion.isInScopeByCountryCode(country)) {
+                    System.out.println("Skipping " + url + ": outside Europe (" + country + ")");
+                    recordEvaluation(conn, url, false);
+                    scrape.filteredOut();
+                    continue;
+                }
 
-            if (SeniorityFilter.requiresTooMuchExperience(rawText)) {
-                System.out.println("Skipping " + url + ": requires more than 2 years of experience");
-                recordEvaluation(conn, url, false);
-                continue;
-            }
+                List<String> requiredLanguages = extractRequiredLanguages(html);
+                boolean requiresDutch = requiredLanguages.stream()
+                        .anyMatch(lang -> lang.strip().equalsIgnoreCase("dutch"));
+                if (requiresDutch) {
+                    System.out.println("Skipping " + url + ": requires Dutch ("
+                            + String.join(", ", requiredLanguages) + ")");
+                    recordEvaluation(conn, url, false);
+                    scrape.filteredOut();
+                    continue;
+                }
 
-            VacancyRecord vacancy;
-            try {
-                vacancy = toVacancy(url, posting);
-            } catch (NoSuchElementException exc) {
-                System.out.println("Skipping malformed posting at " + url + ": " + exc.getMessage());
-                recordEvaluation(conn, url, false);
-                continue;
-            }
+                String rawText = JobPostingHtml.cleanDescription(posting);
+                if (SeniorityFilter.isSeniorRole(rawText)) {
+                    System.out.println("Skipping " + url + ": description indicates a senior role");
+                    recordEvaluation(conn, url, false);
+                    scrape.filteredOut();
+                    continue;
+                }
 
-            VacancyRepository.upsertVacancy(conn, vacancy);
-            recordEvaluation(conn, url, true);
-            count++;
+                if (SeniorityFilter.requiresTooMuchExperience(rawText)) {
+                    System.out.println("Skipping " + url + ": requires more than 2 years of experience");
+                    recordEvaluation(conn, url, false);
+                    scrape.filteredOut();
+                    continue;
+                }
+
+                VacancyRecord vacancy;
+                try {
+                    vacancy = toVacancy(url, posting);
+                } catch (NoSuchElementException exc) {
+                    System.out.println("Skipping malformed posting at " + url + ": " + exc.getMessage());
+                    recordEvaluation(conn, url, false);
+                    scrape.filteredOut();
+                    continue;
+                }
+
+                VacancyRepository.upsertVacancy(conn, vacancy);
+                recordEvaluation(conn, url, true);
+                scrape.stored();
+                count++;
+            }
+            scrape.listingComplete();
         }
         return count;
     }

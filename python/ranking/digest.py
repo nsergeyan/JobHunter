@@ -37,7 +37,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 from ranking.baseline import FeatureBuilder, expected_rating
-from ranking.data import load_labeled_vacancies, load_unlabeled_vacancies
+from ranking.data import load_labeled_vacancies, load_scrape_health, load_unlabeled_vacancies
 from ranking.filters import (
     NETHERLANDS_LOCATION_TERMS,
     matches_location,
@@ -239,6 +239,38 @@ def save_digest(markdown: str) -> Path:
     return path
 
 
+def format_health(failures: pd.DataFrame, companies_scraped: int) -> list[str]:
+    """Lines reporting company scrapes whose most recent attempt failed.
+
+    This is the counterweight to a scraper that fails softly. A stale board token
+    or a changed JSON shape prints one line among hundreds and is never seen
+    again, so the company just stops appearing and the digest looks fine, only
+    shorter. Surfacing it next to the results is the point: a digest with nothing
+    in it reads very differently once you know a third of the boards errored.
+    """
+    if companies_scraped == 0:
+        return []
+    if failures.empty:
+        return ["", "---", "", f"_Scraper health: all {companies_scraped} company scrapes succeeded._"]
+
+    lines = [
+        "",
+        "---",
+        "",
+        f"**Scraper health: {len(failures)} of {companies_scraped} company scrapes failed "
+        "on their most recent run.**",
+        "",
+    ]
+    for _, row in failures.iterrows():
+        # `or` is not enough here: pandas turns a SQL NULL into NaN, and NaN is
+        # truthy, so a source-wide failure would print the literal "nan".
+        company = "(whole source)" if pd.isna(row["company"]) or not row["company"] else row["company"]
+        # Errors carry a full response body, which can be a page of HTML.
+        error = " ".join(str(row["error"]).split())[:160]
+        lines.append(f"- `{row['source']}/{company}`: {error}")
+    return lines
+
+
 def build_digest(
     top_k: int,
     since_days: int | None,
@@ -259,6 +291,10 @@ def build_digest(
     markdown = format_digest(
         ranked, top_k, pool_size, since_days, seniority_include, location_include, boundary
     )
+    failures, companies_scraped = load_scrape_health()
+    health = format_health(failures, companies_scraped)
+    if health:
+        markdown = markdown.rstrip("\n") + "\n" + "\n".join(health) + "\n"
     return markdown, ranked
 
 

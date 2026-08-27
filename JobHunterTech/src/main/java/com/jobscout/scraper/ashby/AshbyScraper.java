@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
+import com.jobscout.scraper.CompanyScrape;
 import com.jobscout.scraper.CompanyRegistry;
 import com.jobscout.scraper.HttpFetcher;
 import com.jobscout.scraper.ScraperException;
@@ -71,12 +72,21 @@ public class AshbyScraper extends BaseScraper {
         return TargetRegion.textMentionsTargetRegion(job.path("location").asText(""));
     }
 
+    /**
+     * The board's own stable posting id, pulled out separately because the scrape
+     * loop needs it BEFORE filtering: a posting that merely failed a filter must
+     * still count as seen, or it would look like it had closed.
+     */
+    private static String externalIdOf(JsonNode job) {
+        return job.path("id").asText(job.path("jobUrl").asText(null));
+    }
+
     public VacancyRecord toVacancy(AshbyCompany company, JsonNode job) {
         String title = job.path("title").asText("");
         String url = job.path("jobUrl").asText(null);
         // Ashby returns the posting's stable id; jobUrl already ends in it. Fall back
         // to the url if a future response shape omits the field.
-        String externalId = job.path("id").asText(url);
+        String externalId = externalIdOf(job);
         String location = job.path("location").asText(null);
         String rawText = job.path("descriptionPlain").asText("").strip();
 
@@ -86,45 +96,56 @@ public class AshbyScraper extends BaseScraper {
     public int run(Connection conn) {
         int count = 0;
         for (AshbyCompany company : companies) {
-            JsonNode response;
-            try {
-                response = fetchJobs(company);
-            } catch (ScraperException exc) {
-                System.out.println("Skipping " + company.company() + ": " + exc.getMessage());
-                continue;
-            }
-
-            JsonNode jobs = response.path("jobs");
-            if (!jobs.isArray()) {
-                continue;
-            }
-            for (JsonNode job : jobs) {
-                String title = job.path("title").asText("");
-                if (!ScraperPatterns.isCandidateTitle(title)) {
+            try (CompanyScrape scrape = beginFullListing(conn, company.company())) {
+                JsonNode response;
+                try {
+                    response = fetchJobs(company);
+                } catch (ScraperException exc) {
+                    scrape.failed(exc.getMessage());
+                    System.out.println("Skipping " + company.company() + ": " + exc.getMessage());
                     continue;
                 }
 
-                if (!isInTargetRegion(job)) {
-                    System.out.println("Skipping " + company.company() + " \"" + title + "\": outside Europe");
+                JsonNode jobs = response.path("jobs");
+                if (!jobs.isArray()) {
+                    scrape.failed("response contained no jobs array -- the board's shape may have changed");
                     continue;
                 }
+                for (JsonNode job : jobs) {
+                    String title = job.path("title").asText("");
+                    scrape.listed(externalIdOf(job));
+                    if (!ScraperPatterns.isCandidateTitle(title)) {
+                        scrape.filteredOut();
+                        continue;
+                    }
 
-                String description = job.path("descriptionPlain").asText("");
-                if (SeniorityFilter.isSeniorRole(description)) {
-                    System.out.println("Skipping " + company.company() + " \"" + title
-                            + "\": description indicates a senior role");
-                    continue;
+                    if (!isInTargetRegion(job)) {
+                        System.out.println("Skipping " + company.company() + " \"" + title + "\": outside Europe");
+                        scrape.filteredOut();
+                        continue;
+                    }
+
+                    String description = job.path("descriptionPlain").asText("");
+                    if (SeniorityFilter.isSeniorRole(description)) {
+                        System.out.println("Skipping " + company.company() + " \"" + title
+                                + "\": description indicates a senior role");
+                        scrape.filteredOut();
+                        continue;
+                    }
+
+                    if (SeniorityFilter.requiresTooMuchExperience(description)) {
+                        System.out.println("Skipping " + company.company() + " \"" + title
+                                + "\": requires more than 2 years of experience");
+                        scrape.filteredOut();
+                        continue;
+                    }
+
+                    VacancyRecord vacancy = toVacancy(company, job);
+                    VacancyRepository.upsertVacancy(conn, vacancy);
+                    scrape.stored();
+                    count++;
                 }
-
-                if (SeniorityFilter.requiresTooMuchExperience(description)) {
-                    System.out.println("Skipping " + company.company() + " \"" + title
-                            + "\": requires more than 2 years of experience");
-                    continue;
-                }
-
-                VacancyRecord vacancy = toVacancy(company, job);
-                VacancyRepository.upsertVacancy(conn, vacancy);
-                count++;
+                scrape.listingComplete();
             }
         }
         return count;

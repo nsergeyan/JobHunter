@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS vacancies (
     scraped_at TEXT NOT NULL,      -- ISO 8601 timestamp of the scrape that wrote this row
     first_seen TEXT NOT NULL,      -- ISO 8601 timestamp we first saw this (source, url)
     last_seen TEXT NOT NULL,       -- ISO 8601 timestamp we last saw it still listed
+    closed_at TEXT,                -- ISO 8601 timestamp we first noticed it had vanished from
+                                    -- its board, NULL while still listed. Set only after a
+                                    -- clean full read of that company's listing, so an outage
+                                    -- cannot mass-close a board
     UNIQUE (source, url)
 );
 
@@ -78,3 +82,21 @@ CREATE TABLE IF NOT EXISTS seen_postings (
                                     -- re-opens everything it previously rejected
     PRIMARY KEY (source, external_id)
 );
+
+-- One row per company per scrape. When a board changes shape or a token goes stale the
+-- scraper prints one "Skipping Acme" line among hundreds and carries on, so a company can
+-- quietly stop being scraped for weeks. These rows make that visible and give the digest
+-- something to report. company is NULL for sources that are not scraped per company.
+CREATE TABLE IF NOT EXISTS scrape_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    company TEXT,
+    started_at TEXT NOT NULL,      -- ISO 8601, also the cutoff for closing stale postings
+    finished_at TEXT NOT NULL,
+    fetched INTEGER NOT NULL DEFAULT 0,   -- postings the board returned, before filtering
+    accepted INTEGER NOT NULL DEFAULT 0,  -- passed every filter and were stored
+    rejected INTEGER NOT NULL DEFAULT 0,  -- returned but filtered out
+    error TEXT                     -- NULL on success, the failure message otherwise
+);
+
+CREATE INDEX IF NOT EXISTS idx_scrape_runs_finished_at ON scrape_runs (finished_at);

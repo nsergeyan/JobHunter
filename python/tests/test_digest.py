@@ -13,6 +13,7 @@ import pytest
 
 from ranking.digest import (
     NEW_FALLBACK_DAYS,
+    format_health,
     mark_new,
     new_since_boundary,
     previous_digest_date,
@@ -101,3 +102,45 @@ def test_boundary_uses_previous_digest_when_present(tmp_path, monkeypatch):
     monkeypatch.setattr("ranking.digest.DIGEST_DIR", tmp_path)
     (tmp_path / "2026-08-25.md").write_text("x")
     assert new_since_boundary() == date(2026, 8, 25)
+
+
+class TestScraperHealth:
+    """The health section exists because scrapers fail softly. A stale board token
+    prints one line among hundreds and the company simply stops appearing, so a
+    short digest looks the same whether the market is quiet or a third of the
+    boards are erroring."""
+
+    @staticmethod
+    def _failures(*rows) -> pd.DataFrame:
+        return pd.DataFrame(list(rows), columns=["source", "company", "error", "finished_at"])
+
+    def test_nothing_is_reported_before_any_scrape_has_run(self):
+        # A fresh checkout has an empty scrape_runs table. Claiming "all 0 scrapes
+        # succeeded" would be noise.
+        assert format_health(self._failures(), 0) == []
+
+    def test_clean_run_is_stated_positively(self):
+        lines = format_health(self._failures(), 141)
+        assert any("all 141 company scrapes succeeded" in line for line in lines)
+
+    def test_failures_are_named_with_their_source(self):
+        lines = format_health(
+            self._failures(("greenhouse", "Acme", "failed with status 404", "2026-08-27T10:00:00Z")), 141
+        )
+        body = "\n".join(lines)
+        assert "1 of 141 company scrapes failed" in body
+        assert "`greenhouse/Acme`" in body
+        assert "404" in body
+
+    def test_source_wide_failure_has_a_readable_company_label(self):
+        # Magnet.me records company as NULL, since it is not scraped per company.
+        lines = format_health(self._failures(("magnetme", None, "sitemap unreachable", "2026-08-27T10:00:00Z")), 141)
+        assert any("(whole source)" in line for line in lines)
+
+    def test_long_error_bodies_are_collapsed(self):
+        # An HTTP error carries the whole response body, which can be a page of HTML.
+        sprawling = "line one\n   line two\t\tline three " + "x" * 500
+        lines = format_health(self._failures(("workday", "Acme", sprawling, "2026-08-27T10:00:00Z")), 141)
+        entry = [line for line in lines if line.startswith("- ")][0]
+        assert "\n" not in entry and "\t" not in entry
+        assert len(entry) < 200, "a single failure should not flood the digest"

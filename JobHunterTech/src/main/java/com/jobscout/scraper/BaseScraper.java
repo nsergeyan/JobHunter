@@ -30,4 +30,28 @@ public abstract class BaseScraper {
     protected void recordEvaluation(Connection conn, String externalId, boolean accepted) {
         SeenPostingRepository.markSeen(conn, sourceName(), externalId, accepted, FilterVersion.CURRENT);
     }
+
+    /**
+     * Bookkeeping for a company whose ENTIRE board listing this scraper walks, so a
+     * posting's absence really does mean it is gone. Use as a try-with-resources
+     * around that company's loop: the scrape_runs row is written on every path out,
+     * and postings missing from a clean full read get closed.
+     */
+    protected CompanyScrape beginFullListing(Connection conn, String company) {
+        return new CompanyScrape(conn, sourceName(), company, true);
+    }
+
+    /**
+     * Bookkeeping for a source where this scraper only ever sees a SUBSET of what
+     * the board lists, so absence proves nothing and nothing is ever closed.
+     *
+     * Two cases need this. Workday and SmartRecruiters apply the title filter while
+     * paging, so a posting renamed to "Senior Engineer" simply stops coming back,
+     * which is not the same as it closing. Magnet.me works from a sitemap spanning
+     * many companies at once, with no per-company listing to compare against, and
+     * passes null for the company.
+     */
+    protected CompanyScrape beginPartialListing(Connection conn, String company) {
+        return new CompanyScrape(conn, sourceName(), company, false);
+    }
 }

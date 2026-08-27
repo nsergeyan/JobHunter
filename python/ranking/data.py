@@ -34,6 +34,7 @@ FROM vacancies v
 JOIN vacancy_extractions e ON e.vacancy_id = v.id
 LEFT JOIN labels l ON l.vacancy_id = v.id
 WHERE l.label IS NULL
+  AND v.closed_at IS NULL
 """
 
 # Row order has to be pinned. SQLite makes no ordering promise without ORDER BY,
@@ -51,6 +52,10 @@ ORDER_BY_ID_SQL = " ORDER BY v.id"
 #
 # first_seen is the column that answers "is this new", and it is never touched
 # on conflict. It rides along in the SELECT so the digest can mark new postings.
+#
+# closed_at is a third, separate thing: the scraper sets it once a posting has
+# actually vanished from its board, so filtering on it stops the digest linking
+# to dead applications. Only sources that read a company's whole listing set it.
 #
 # ISO 8601 strings sort lexicographically in the same order they sort
 # chronologically, so a plain string comparison against an ISO cutoff is correct
@@ -82,5 +87,41 @@ def load_unlabeled_vacancies(since_days: int | None = None) -> pd.DataFrame:
     conn = sqlite3.connect(DB_PATH)
     try:
         return pd.read_sql_query(sql, conn, params=params)
+    finally:
+        conn.close()
+
+
+# Latest run per (source, company) that ended in an error. A company that failed
+# once and recovered is not worth reporting -- only one whose MOST RECENT attempt
+# failed is actually broken right now. SQLite's `IS` handles the NULL company used
+# by sources that are not scraped per company, where plain `=` would never match.
+LATEST_FAILURES_SQL = """
+SELECT source, company, error, finished_at
+FROM scrape_runs r
+WHERE r.finished_at = (
+    SELECT MAX(finished_at) FROM scrape_runs r2
+    WHERE r2.source = r.source AND r2.company IS r.company
+)
+AND r.error IS NOT NULL
+ORDER BY r.source, r.company
+"""
+
+COMPANY_COUNT_SQL = "SELECT COUNT(DISTINCT source || '/' || COALESCE(company, '')) AS n FROM scrape_runs"
+
+
+def load_scrape_health() -> tuple[pd.DataFrame, int]:
+    """Companies whose most recent scrape failed, plus how many were scraped at all.
+
+    Returns an empty frame when scrape_runs does not exist yet: the table is
+    created by the Java side, so a Python-only checkout can predate it, and a
+    missing health section is a much better outcome than a crashed digest.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        failures = pd.read_sql_query(LATEST_FAILURES_SQL, conn)
+        total = int(pd.read_sql_query(COMPANY_COUNT_SQL, conn)["n"].iloc[0])
+        return failures, total
+    except (sqlite3.OperationalError, pd.errors.DatabaseError):
+        return pd.DataFrame(columns=["source", "company", "error", "finished_at"]), 0
     finally:
         conn.close()
