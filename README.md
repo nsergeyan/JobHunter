@@ -28,7 +28,7 @@ ranking model → a rigorous benchmark against two untrained baselines.
   | 574 labeled, 82 rated "yes" | ndcg@10, 95% interval | paired vs hand-crafted |
   |---|---|---|
   | Logistic regression **+ description** | 0.77 [0.42-0.97] | ahead in **79%** of resamples |
-  | Cosine similarity (untrained baseline) | 0.77 [0.49-0.96] | ahead in 52% |
+  | Cosine similarity (untrained baseline) | 0.77 [0.49-0.96] | ahead in **60%** |
   | Logistic regression, hand-crafted only | 0.74 [0.37-0.96] | - |
   | Logistic regression **+ semantic feature** | 0.73 [0.37-0.97] | ahead in **33%** |
 
@@ -258,19 +258,25 @@ distribution of the difference.
 |---|---|---|
 | + description **vs** hand-crafted | +0.028 [-0.043, +0.099] | **79%** of resamples |
 | + description **vs** cosine similarity | +0.002 [-0.234, +0.279] | 48% of resamples |
+| hand-crafted **vs** cosine similarity | -0.026 [-0.298, +0.278] | 41% of resamples |
 | + semantic **vs** hand-crafted | -0.009 [-0.051, +0.033] | **33%** of resamples |
 
-Three findings, in descending order of confidence:
+Four findings, in descending order of confidence:
 
-1. **The trained model and the embedding baseline are indistinguishable.** 48% of resamples, a
-   coin flip. Not a win, not a loss.
+1. **The description features are consistently but not conclusively positive.** Ahead of the
+   plain model in 73-79% of resamples across all three NDCG cutoffs. A real direction, well
+   short of the 95% that would settle it, which is why they ship behind `--description` rather
+   than on by default.
 2. **The semantic feature does not help, and mildly hurts.** It trails the plain hand-crafted
-   model in two thirds of resamples (only 33% ahead on ndcg@10, 23% on precision@10). This
+   model in two thirds of resamples (33% ahead on ndcg@10, 23% on precision@10). This
    *contradicts* the earlier result below, and is the clearest example of why the measurement
    changes mattered.
-3. **The description features are consistently but not conclusively positive.** Ahead in 73-79%
-   of resamples across all three NDCG cutoffs. A real direction, well short of proof, which is
-   why they ship behind `--description` rather than on by default.
+3. **On hand-crafted features alone, the model is still modestly behind cosine similarity.**
+   Ahead in only 41% of resamples on ndcg@10, 34% on ndcg@5. Directionally the same conclusion
+   Round 1 reached, and it survives the better measurement.
+4. **With description features it draws level.** 48% of resamples against cosine, a coin flip.
+   So the gap that the semantic feature was introduced to close does get closed, just by a
+   different feature than the original write-up credited.
 
 ### What this replaced, and why it is worth showing
 

@@ -228,6 +228,12 @@ def main() -> None:
     print_comparison(
         "LR + description", by_name["Logistic regression + description"],
         "Cosine (untrained)", by_name["Cosine similarity (untrained)"], y_original)
+    # The project's founding question: does training on personal labels beat a
+    # generic similarity heuristic at all? It needs the plain feature set, not the
+    # best variant, or the answer is about the features rather than about training.
+    print_comparison(
+        "LR (hand-crafted)", by_name["Logistic regression (hand-crafted)"],
+        "Cosine (untrained)", by_name["Cosine similarity (untrained)"], y_original)
     if "LLM-as-judge (untrained)" in by_name:
         print_comparison(
             "LR + description", by_name["Logistic regression + description"],
