@@ -40,7 +40,7 @@ from sklearn.metrics import classification_report
 
 from ranking.data import load_labeled_vacancies
 from ranking.embeddings import embedding_scores
-from ranking.filters import drop_non_english
+from ranking.filters import drop_language_blocked
 
 MIN_SKILL_COUNT = 3
 TITLE_MAX_FEATURES = 150
@@ -470,7 +470,7 @@ def main() -> None:
 
     df = load_labeled_vacancies()
     before = len(df)
-    df = drop_non_english(df)
+    df = drop_language_blocked(df)
     print(f"Dropped {before - len(df)} postings requiring a non-English language ({len(df)} remain)\n")
 
     if args.semantic:

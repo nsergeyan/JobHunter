@@ -191,10 +191,21 @@ as reference points (not tuned to compete):
 **Evaluation metric.** Precision@k, not accuracy or a single-threshold F1. The use case is a
 ranked shortlist a human reviews, so what matters is "how good are the top k," not "what
 fraction of all postings were classified correctly" (a metric dominated by the easy,
-unambiguous negatives). Methods are scored on the same English-only postings (postings
-requiring a non-English language are removed by a hard rule-based filter, not left to a model
-to infer), and the trained model's scores are its **out-of-fold** predictions, so every method
-is judged only on postings it never trained on.
+unambiguous negatives). Methods are scored on the same postings (those that *name* a
+non-English requirement are removed by a hard rule-based filter, not left to a model to infer),
+and the trained model's scores are its **out-of-fold** predictions, so every method is judged
+only on postings it never trained on.
+
+**Language, and why it is two filters rather than one.** A posting that *names* a Dutch
+requirement is a role you cannot take, so it is dropped everywhere, training included. A
+posting merely *written* in German is a different matter: the ad is German but the working
+language is frequently English, which is routine at Bosch research and certain at Palantir. The
+labels settled it. Of the postings caught by written-language detection, 28 were rated no but 8
+were maybe and 3 were **yes**, so dropping them outright would contradict ratings already
+given. Written language is therefore a *view* filter: hidden from the digest by default,
+visible with `--all-languages` and tagged with a language code, and always kept in training,
+where those 11 positive labels are real preference signal. Detection counts function words,
+which prose cannot avoid and which are not borrowed the way technical nouns are.
 
 **Second metric: NDCG@k.** Precision@k has two blind spots. It scores a *maybe* exactly like a
 *no*, throwing away the middle of the very ordinal scale the model was built to predict, and
@@ -381,6 +392,7 @@ python/
 │   ├── baseline.py      # features, ordinal model, repeated CV, precision@k + NDCG@k
 │   ├── active.py        # uncertainty ordering for the labeling queue
 │   ├── holdout.py       # the 20% reserved for unbiased evaluation
+│   ├── filters.py       # hard constraints + view filters, incl. language detection
 │   └── digest.py        # ranked shortlist, NEW badges, scraper-health footer
 ├── analysis/            # placeholder for the market-analysis notebook
 └── tests/

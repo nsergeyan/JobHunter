@@ -33,6 +33,17 @@ PREFERENCE_PROFILE = (
 # that you may well judge applicable anyway. Narrowing trades recall for focus.
 SENIORITY_INCLUDE: set[str] | None = {"internship"}
 
+# Whether the digest hides postings WRITTEN in a language other than English
+# (detected from the text, see ranking.filters). A third VIEW filter, so the model
+# still trains on every one of them.
+#
+# Worth knowing before flipping it: postings this catches are overwhelmingly ones
+# you passed on (28 no) but not exclusively (8 maybe, 3 yes, mostly Bosch ML
+# internships and a French Palantir internship). An ad written in German often
+# describes a role whose working language is English. Set to False, or pass
+# --all-languages, when you want to see them.
+HIDE_NON_ENGLISH_POSTINGS: bool = True
+
 # Locations the digest is allowed to show, matched as tokens against the
 # posting's free-text location. Same deal as SENIORITY_INCLUDE: a view filter,
 # not a modeling choice. None shows everywhere, ranked.

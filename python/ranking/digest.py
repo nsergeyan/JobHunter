@@ -39,12 +39,15 @@ from sklearn.linear_model import LogisticRegression
 from ranking.baseline import FeatureBuilder, expected_rating
 from ranking.data import load_labeled_vacancies, load_scrape_health, load_unlabeled_vacancies
 from ranking.filters import (
+    LANGUAGE_CODES,
     NETHERLANDS_LOCATION_TERMS,
-    drop_non_english,
+    detect_written_language,
+    drop_language_blocked,
+    matches_language_view,
     matches_location,
     matches_seniority,
 )
-from ranking.preferences import LOCATION_INCLUDE, SENIORITY_INCLUDE
+from ranking.preferences import HIDE_NON_ENGLISH_POSTINGS, LOCATION_INCLUDE, SENIORITY_INCLUDE
 
 DEFAULT_TOP_K = 10
 DEFAULT_DAYS = 14
@@ -104,6 +107,7 @@ def _apply_view_filters(
     df: pd.DataFrame,
     seniority_include: set[str] | None,
     location_include: set[str] | None,
+    hide_non_english: bool = True,
 ) -> pd.DataFrame:
     """Narrow what you SEE, never what the model learned. Applied after scoring,
     which changes nothing about the order (scores are per-posting), but does mean
@@ -116,6 +120,8 @@ def _apply_view_filters(
         keep &= df["seniority"].apply(lambda s: matches_seniority(s, seniority_include))
     if location_include is not None:
         keep &= df["location"].apply(lambda loc: matches_location(loc, location_include))
+    if hide_non_english and "raw_text" in df.columns:
+        keep &= df["raw_text"].apply(lambda t: matches_language_view(t, True))
     return df[keep].reset_index(drop=True)
 
 
@@ -123,13 +129,14 @@ def score_unlabeled(
     since_days: int | None = DEFAULT_DAYS,
     seniority_include: set[str] | None = SENIORITY_INCLUDE,
     location_include: set[str] | None = LOCATION_INCLUDE,
+    hide_non_english: bool = HIDE_NON_ENGLISH_POSTINGS,
 ) -> tuple[pd.DataFrame, int]:
     """Train on all labeled data, score the eligible unlabeled postings, and
     return them sorted best-first alongside the pool size before the view
     filters were applied (so the caller can report what the filters cost).
     """
-    labeled = drop_non_english(load_labeled_vacancies())
-    unlabeled = drop_non_english(load_unlabeled_vacancies(since_days))
+    labeled = drop_language_blocked(load_labeled_vacancies())
+    unlabeled = drop_language_blocked(load_unlabeled_vacancies(since_days))
     pool_size = len(unlabeled)
 
     if unlabeled.empty:
@@ -141,7 +148,7 @@ def score_unlabeled(
 
     scores = expected_rating(model.predict_proba(builder.transform(unlabeled)))
     ranked = unlabeled.assign(score=scores)
-    ranked = _apply_view_filters(ranked, seniority_include, location_include)
+    ranked = _apply_view_filters(ranked, seniority_include, location_include, hide_non_english)
     return ranked.sort_values("score", ascending=False).reset_index(drop=True), pool_size
 
 
@@ -149,6 +156,7 @@ def _describe_scope(
     since_days: int | None,
     seniority_include: set[str] | None,
     location_include: set[str] | None,
+    hide_non_english: bool = True,
 ) -> str:
     window = (
         f"still listed as of a scrape in the last {since_days} days" if since_days else "any age"
@@ -162,7 +170,8 @@ def _describe_scope(
         location = "Netherlands"
     else:
         location = ",".join(sorted(location_include))
-    return f"unlabeled, {window}, seniority: {seniority}, location: {location}"
+    language = "English-language only" if hide_non_english else "any language"
+    return f"unlabeled, {window}, seniority: {seniority}, location: {location}, {language}"
 
 
 def format_digest(
@@ -173,11 +182,12 @@ def format_digest(
     seniority_include: set[str] | None,
     location_include: set[str] | None = None,
     boundary: date | None = None,
+    hide_non_english: bool = True,
 ) -> str:
     """Render the digest as markdown. Doubles as the terminal output, so the
     printed and saved versions can never drift apart.
     """
-    scope = _describe_scope(since_days, seniority_include, location_include)
+    scope = _describe_scope(since_days, seniority_include, location_include, hide_non_english)
     lines = [f"# Job digest {date.today().isoformat()}", "", f"_{scope}_", ""]
 
     if ranked.empty:
@@ -214,9 +224,17 @@ def format_digest(
         location = row.get("location") or "?"
         seniority = row.get("seniority") or "unknown"
         marker = " **NEW**" if row.get("is_new", False) else ""
+        # Only ever non-empty when the language view is off, so it labels exactly
+        # the postings you opted in to seeing.
+        language, _ = detect_written_language(row.get("raw_text"))
+        language_tag = (
+            f" `{LANGUAGE_CODES.get(language, language)}`"
+            if language and not hide_non_english
+            else ""
+        )
         lines.append(
             f"{rank}. **{row['score']:.2f}**{marker}  "
-            f"{row['title']} - {row['company']} ({location}) `{seniority}`"
+            f"{row['title']} - {row['company']} ({location}) `{seniority}`{language_tag}"
         )
         url = row.get("url")
         if isinstance(url, str) and url:
@@ -271,6 +289,7 @@ def build_digest(
     seniority_include: set[str] | None,
     location_include: set[str] | None,
     new_only: bool = False,
+    hide_non_english: bool = HIDE_NON_ENGLISH_POSTINGS,
 ) -> tuple[str, pd.DataFrame]:
     """Score, mark newness, optionally narrow to new arrivals, and render.
 
@@ -278,12 +297,13 @@ def build_digest(
     never drift apart on what a digest contains.
     """
     boundary = new_since_boundary()
-    ranked, pool_size = score_unlabeled(since_days, seniority_include, location_include)
+    ranked, pool_size = score_unlabeled(since_days, seniority_include, location_include, hide_non_english)
     ranked = mark_new(ranked, boundary)
     if new_only:
         ranked = ranked[ranked["is_new"]].reset_index(drop=True)
     markdown = format_digest(
-        ranked, top_k, pool_size, since_days, seniority_include, location_include, boundary
+        ranked, top_k, pool_size, since_days, seniority_include, location_include, boundary,
+        hide_non_english,
     )
     failures, companies_scraped = load_scrape_health()
     health = format_health(failures, companies_scraped)
@@ -316,6 +336,7 @@ def main() -> None:
     parser.add_argument("--all-seniority", action="store_true", help="show every seniority, ignoring preferences.py")
     parser.add_argument("--location", help="comma-separated location tokens to show, overriding preferences.py (e.g. berlin,munich)")
     parser.add_argument("--all-locations", action="store_true", help="show every location, ignoring preferences.py")
+    parser.add_argument("--all-languages", action="store_true", help="also show postings written in a language other than English")
     parser.add_argument("--new-only", action="store_true", help="show only postings first seen since the previous digest")
     parser.add_argument("--no-save", action="store_true", help="print only, do not write the markdown copy")
     args = parser.parse_args()
@@ -325,7 +346,8 @@ def main() -> None:
     location_include = _parse_location(args)
 
     markdown, _ = build_digest(
-        args.top_k, since_days, seniority_include, location_include, args.new_only
+        args.top_k, since_days, seniority_include, location_include, args.new_only,
+        hide_non_english=not args.all_languages,
     )
     print(markdown)
 

@@ -11,8 +11,9 @@ import pytest
 from ranking.filters import (
     NETHERLANDS_LOCATION_TERMS,
     detect_written_language,
-    drop_non_english,
+    drop_language_blocked,
     is_written_in_non_english,
+    matches_language_view,
     matches_location,
     matches_seniority,
     requires_non_english_language,
@@ -176,23 +177,40 @@ class TestWrittenLanguage:
         assert is_written_in_non_english(mixed) is False
 
 
-class TestDropNonEnglish:
-    def test_applies_both_checks(self):
+class TestTwoKindsOfLanguageFilter:
+    """The distinction these pin down. A posting that NAMES a Dutch requirement is a
+    role you cannot take, so it goes everywhere. A posting merely WRITTEN in German
+    often describes a role whose working language is English, and the labels agree:
+    3 such postings were rated yes and 8 maybe. So it only hides them from the
+    digest, and the model still learns from every one.
+    """
+
+    def test_hard_filter_drops_only_stated_requirements(self):
         df = pd.DataFrame({
             "language_requirement": [None, "Dutch", None],
             "raw_text": [
                 TestWrittenLanguage.ENGLISH,   # kept
                 TestWrittenLanguage.ENGLISH,   # dropped: states a Dutch requirement
-                TestWrittenLanguage.GERMAN,    # dropped: written in German
+                TestWrittenLanguage.GERMAN,    # KEPT: written in German, but usable
             ],
         })
-        assert len(drop_non_english(df)) == 1
+        assert len(drop_language_blocked(df)) == 2
 
-    def test_works_without_a_raw_text_column(self):
-        # Some callers load only feature columns, and must not blow up.
-        df = pd.DataFrame({"language_requirement": [None, "German"]})
-        assert len(drop_non_english(df)) == 1
+    def test_german_postings_stay_in_the_training_set(self):
+        # The whole point of the split: these carry real preference signal.
+        df = pd.DataFrame({
+            "language_requirement": [None],
+            "raw_text": [TestWrittenLanguage.GERMAN],
+        })
+        assert len(drop_language_blocked(df)) == 1
+
+    def test_view_filter_hides_foreign_language_postings(self):
+        assert matches_language_view(TestWrittenLanguage.GERMAN, hide_non_english=True) is False
+        assert matches_language_view(TestWrittenLanguage.ENGLISH, hide_non_english=True) is True
+
+    def test_view_filter_shows_everything_when_disabled(self):
+        assert matches_language_view(TestWrittenLanguage.GERMAN, hide_non_english=False) is True
 
     def test_empty_frame_is_returned_unchanged(self):
         df = pd.DataFrame(columns=["language_requirement", "raw_text"])
-        assert drop_non_english(df).empty
+        assert drop_language_blocked(df).empty

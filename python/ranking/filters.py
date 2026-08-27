@@ -1,16 +1,24 @@
 """Hard, rule-based filters applied before ranking -- not learned by the model.
 
-Postings that require proficiency in a language other than English are excluded
-regardless of how well the role otherwise matches. Two independent checks, because
-they catch different things:
+Language is handled by two checks that are deliberately DIFFERENT KINDS of filter,
+and confusing them would be a mistake:
 
-1. STATED requirement. The LLM extraction step pulls out any language the posting
-   names, and a named non-English language drops it.
-2. The language the posting is WRITTEN IN. Check 1 misses a posting written
-   entirely in German that never gets around to saying so, which is common: the
-   requirement is so obvious to the writer that it goes unstated. The ranking model
-   was quietly learning to compensate, having picked up German function words as a
-   signal for "no", which is a real preference being learned through a proxy.
+1. HARD constraint: the posting NAMES a non-English language it requires. A role
+   demanding fluent Dutch is one you cannot take, so it is dropped unconditionally,
+   from training and from the digest alike.
+
+2. VIEW filter: the posting is WRITTEN in another language. Check 1 misses a
+   posting written entirely in German that never says so, which is common, since
+   the requirement is obvious to whoever wrote it. But an ad in German often
+   describes a role whose working language is English, which is routine at Bosch
+   research and certain at Palantir. The labels bear this out: of the postings this
+   check catches, 3 were rated "yes" and 8 "maybe". Treating it as a hard drop
+   would contradict those ratings, so it only hides postings from the digest and
+   the model still trains on every one of them.
+
+The ranking model had spotted the gap before either check existed: with description
+features on, it learned German function words as a signal for "no", a real
+preference being expressed through a proxy instead of a rule.
 
 The seniority filter is different in kind: the language filter reflects a hard
 constraint (a role you cannot do), while seniority reflects what you feel like
@@ -60,6 +68,16 @@ NON_ENGLISH_MARKERS = {
                 "tiene", "puede"},
     "italian": {"del", "della", "una", "che", "nel", "alla", "sono", "nostro", "questa",
                 "il", "di", "gli", "dei", "delle", "anche", "sia"},
+}
+
+# ISO 639-1 codes for display. Slicing the name would give "ge" for german and
+# "du" for dutch, which are not codes anyone recognises.
+LANGUAGE_CODES = {
+    "german": "de",
+    "dutch": "nl",
+    "french": "fr",
+    "spanish": "es",
+    "italian": "it",
 }
 
 # Share of tokens that must be one language's function words before a posting counts
@@ -136,17 +154,30 @@ def is_written_in_non_english(raw_text: str | None) -> bool:
     return ratio >= NON_ENGLISH_MARKER_RATIO
 
 
-def drop_non_english(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply both language checks. The single place every caller should use, so the
-    training set, the benchmark and the digest can never disagree about which
-    postings exist.
+def drop_language_blocked(df: pd.DataFrame) -> pd.DataFrame:
+    """HARD filter, applied everywhere: drop postings that NAME a non-English
+    language requirement.
+
+    Note what this does NOT do. A posting merely written in German survives here and
+    stays in the training set, because the labels say some of those are wanted. The
+    digest hides them separately via matches_language_view.
     """
     if df.empty:
         return df
     keep = ~df["language_requirement"].apply(requires_non_english_language)
-    if "raw_text" in df.columns:
-        keep &= ~df["raw_text"].apply(is_written_in_non_english)
     return df[keep].reset_index(drop=True)
+
+
+def matches_language_view(raw_text: str | None, hide_non_english: bool) -> bool:
+    """VIEW filter: should the digest show this posting, given its written language?
+
+    `hide_non_english=False` means show everything. Like the seniority and location
+    views, this only narrows what is DISPLAYED: scores are computed per posting, so
+    it never reorders the ranking.
+    """
+    if not hide_non_english:
+        return True
+    return not is_written_in_non_english(raw_text)
 
 
 def matches_seniority(seniority: str | None, include: set[str] | None) -> bool:

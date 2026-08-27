@@ -14,8 +14,11 @@ Reads/writes the same SQLite file the Java side uses: `../data/job_scout.db`.
 - **`ranking/`** - feature engineering, logistic regression baseline, and the
   three-way benchmark (steps 4-5):
   - `data.py` - loads labeled vacancies from SQLite.
-  - `filters.py` - hard, rule-based filters applied before ranking (e.g. drops
-    postings requiring a non-English language).
+  - `filters.py` - the two kinds of filter. HARD constraints drop a posting
+    everywhere (it names a non-English language requirement). VIEW filters only
+    narrow the digest (seniority, location, and whether a posting is *written*
+    in another language). Written-language detection counts function words,
+    which running prose cannot avoid.
   - `preferences.py` - the fit preference profile shared by the LLM-judge and
     cosine-similarity baselines.
   - `baseline.py` - the logistic regression model: feature engineering
@@ -72,10 +75,20 @@ python -m ranking.digest --days 0 -k 20           # no time limit, top 20
 python -m ranking.digest --new-only               # only postings new since the last digest
 ```
 
-Both views are **display** filters: the model trains on every labeled posting
-regardless, and scores each posting independently, so narrowing them changes
-what you see but never the order. Top-k is applied after them, so `-k 10` yields
-ten postings that match, not ten postings of which some match.
+All three views are **display** filters: the model trains on every labeled
+posting regardless, and scores each posting independently, so narrowing them
+changes what you see but never the order. Top-k is applied after them, so `-k 10`
+yields ten postings that match, not ten postings of which some match.
+
+The third view is language. A posting that *names* a non-English requirement is a
+hard drop, since it is a role you cannot take. A posting merely *written* in
+German usually is not: the ad is German but the working language is often
+English. Of the postings this catches, 28 were rated no, but 8 maybe and 3 yes,
+so they stay in training and are only hidden from the digest.
+
+```bash
+python -m ranking.digest --all-languages   # show them, tagged `de`, `nl`, `fr`
+```
 
 Location is free text and differs per platform (`Amsterdam, NL`,
 `Veldhoven, Netherlands`, `ACT (Amsterdam - Acanthus)`, bare `Eindhoven`), so

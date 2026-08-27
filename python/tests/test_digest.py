@@ -13,6 +13,7 @@ import pytest
 
 from ranking.digest import (
     NEW_FALLBACK_DAYS,
+    format_digest,
     format_health,
     mark_new,
     new_since_boundary,
@@ -144,3 +145,57 @@ class TestScraperHealth:
         entry = [line for line in lines if line.startswith("- ")][0]
         assert "\n" not in entry and "\t" not in entry
         assert len(entry) < 200, "a single failure should not flood the digest"
+
+
+class TestLanguageTag:
+    """When the language view is off, foreign-language postings are labelled rather
+    than silently mixed in, so opting to see them does not mean guessing which is
+    which."""
+
+    @staticmethod
+    def _ranked(raw_text):
+        return pd.DataFrame({
+            "score": [1.5],
+            "title": ["ML Intern"],
+            "company": ["Bosch"],
+            "location": ["Stuttgart"],
+            "seniority": ["internship"],
+            "url": ["https://example.com/1"],
+            "first_seen": ["2026-08-26T10:00:00Z"],
+            "raw_text": [raw_text],
+        })
+
+    GERMAN = (
+        "Du entwickelst und etablierst innovative Lösungen im Bereich Machine "
+        "Learning. Deine Aufgaben koordinierst du mit anderen Teammitgliedern und "
+        "Abteilungen. Wir bieten dir die Chance, dich weiterzuentwickeln, und du "
+        "wirst durch erfahrene Kollegen begleitet, sodass du schnell Verantwortung "
+        "übernehmen kannst. Bei uns arbeitest du in einem Team, das dich fördert."
+    )
+
+    def test_foreign_posting_is_tagged_when_languages_are_shown(self):
+        out = format_digest(self._ranked(self.GERMAN), 5, 1, 14, None, None,
+                            hide_non_english=False)
+        assert "`de`" in out
+
+    def test_no_tag_when_the_english_only_view_is_active(self):
+        # In that view every posting shown is English, so a tag would be noise.
+        out = format_digest(self._ranked(self.GERMAN), 5, 1, 14, None, None,
+                            hide_non_english=True)
+        assert "`de`" not in out
+
+    def test_english_posting_is_never_tagged(self):
+        english = (
+            "We are looking for a machine learning intern to join our team and help "
+            "build models that serve millions of users, working with Python and "
+            "PyTorch across the full lifecycle from prototype to production."
+        )
+        out = format_digest(self._ranked(english), 5, 1, 14, None, None,
+                            hide_non_english=False)
+        assert "`de`" not in out
+
+    def test_scope_line_states_which_language_view_is_active(self):
+        shown = format_digest(self._ranked(self.GERMAN), 5, 1, 14, None, None, hide_non_english=False)
+        hidden = format_digest(self._ranked("x"), 5, 1, 14, None, None, hide_non_english=True)
+        assert "any language" in shown
+        assert "English-language only" in hidden

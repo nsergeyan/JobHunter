@@ -12,7 +12,7 @@ import numpy as np
 from ranking.baseline import cross_validate, precision_at_k
 from ranking.data import load_labeled_vacancies
 from ranking.embeddings import embedding_scores
-from ranking.filters import drop_non_english
+from ranking.filters import drop_language_blocked
 from ranking.llm_judge import judge_all
 
 
@@ -46,7 +46,7 @@ def main() -> None:
 
     df = load_labeled_vacancies()
     before = len(df)
-    df = drop_non_english(df)
+    df = drop_language_blocked(df)
     print(f"Dropped {before - len(df)} postings requiring a non-English language ({len(df)} remain)\n")
 
     y_original = df["label"].to_numpy()

@@ -39,7 +39,7 @@ from ranking.digest import (
     build_digest,
     save_digest,
 )
-from ranking.preferences import LOCATION_INCLUDE, SENIORITY_INCLUDE
+from ranking.preferences import HIDE_NON_ENGLISH_POSTINGS, LOCATION_INCLUDE, SENIORITY_INCLUDE
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 JAVA_PROJECT_DIR = REPO_ROOT / "JobHunterTech"
@@ -165,6 +165,7 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=DEFAULT_DAYS, help=f"only rank postings scraped in the last N days, 0 for no limit (default {DEFAULT_DAYS})")
     parser.add_argument("--all-seniority", action="store_true", help="ignore the seniority filter in preferences.py")
     parser.add_argument("--all-locations", action="store_true", help="ignore the location filter in preferences.py")
+    parser.add_argument("--all-languages", action="store_true", help="also show postings written in a language other than English")
     parser.add_argument("--new-only", action="store_true", help="digest only postings first seen since the previous digest")
     args = parser.parse_args()
 
@@ -197,8 +198,10 @@ def main() -> int:
     location_include = None if args.all_locations else LOCATION_INCLUDE
 
     started = time.monotonic()
+    hide_non_english = HIDE_NON_ENGLISH_POSTINGS and not args.all_languages
     markdown, ranked = build_digest(
-        args.top_k, since_days, seniority_include, location_include, args.new_only
+        args.top_k, since_days, seniority_include, location_include, args.new_only,
+        hide_non_english=hide_non_english,
     )
     results.append(StageResult("rank", True, f"{len(ranked)} postings ranked", time.monotonic() - started))
 
