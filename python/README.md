@@ -35,8 +35,13 @@ Reads/writes the same SQLite file the Java side uses: `../data/job_scout.db`.
     via a local Ollama call.
   - `embeddings.py` - cosine similarity between the preference profile and
     each posting, via Ollama embeddings.
-  - `benchmark.py` - runs all three and reports precision@k side by side.
-    `python -m ranking.benchmark`.
+  - `benchmark.py` - runs all methods and reports precision@k and NDCG@k with
+    95% bootstrap intervals, plus paired comparisons. `python -m ranking.benchmark`
+    (`--skip-judge` drops the slow LLM-judge pass and finishes in about a minute).
+    Two things it is careful about: untrained baselines get intervals too, since
+    a fixed ranking is reproducible but not precise, and methods are compared on
+    the SAME resampled postings rather than by eyeballing whether two intervals
+    overlap, which understates what can be resolved.
   - `digest.py` - ranks unlabeled postings and prints/saves the shortlist
     (step 6), marks new arrivals, and appends a scraper-health footer.
     `python -m ranking.digest`.

@@ -19,28 +19,28 @@ ranking model → a rigorous benchmark against two untrained baselines.
 - **A real experiment, not a demo.** Does a model *trained* on those labels beat (a) an
   LLM asked to judge fit, and (b) ranking by embedding similarity? Measured with
   **precision@k on out-of-fold predictions**, all three on the same set.
-- **The finding, as a research arc.** With hand-crafted features only, the trained model
-  *lost* to a plain embedding-similarity baseline. I diagnosed why (the baseline carried a
-  semantic signal my model lacked), fed that signal in as a feature, and the model went from
-  losing to a **wash**, making that feature its single most important input:
+- **The finding, and the correction that matters more.** With hand-crafted features only, the
+  trained model *lost* to a plain embedding-similarity baseline. I diagnosed why (the baseline
+  carried a semantic signal my model lacked), fed that signal in as a feature, and precision@5
+  jumped from 0.60 to 0.80. Then I rebuilt the measurement, and **most of that result did not
+  survive it**:
 
-  | 509 labeled, 481 English-only | p@5 | p@10 | p@20 |
-  |---|---|---|---|
-  | Logistic regression **+ semantic feature** (trained) | 0.80\* | 0.50 | 0.50 |
-  | Cosine similarity (untrained baseline) | 0.60 | 0.60 | 0.50 |
-  | Logistic regression, hand-crafted features only | 0.60 | 0.50 | 0.45 |
-  | LLM-as-judge | 0.40 | 0.30 | 0.40 |
+  | 574 labeled, 82 rated "yes" | ndcg@10, 95% interval | paired vs hand-crafted |
+  |---|---|---|
+  | Logistic regression **+ description** | 0.77 [0.42-0.97] | ahead in **79%** of resamples |
+  | Cosine similarity (untrained baseline) | 0.77 [0.49-0.96] | ahead in 52% |
+  | Logistic regression, hand-crafted only | 0.74 [0.37-0.96] | - |
+  | Logistic regression **+ semantic feature** | 0.73 [0.37-0.97] | ahead in **33%** |
 
-  <sub>\*Measured at 509 labels on a **single** cross-validation shuffle. That number is now
-  known to be optimistic: repeating the whole procedure across 5 shuffles shows p@5 swinging by
-  ±0.18 or worse, so a single run lands anywhere in a wide band. See
-  [Round 3](#round-3-separating-signal-from-noise), which is the honest reading of this table.</sub>
-- **Measuring the measurement.** A later pass found the evaluation itself was not reproducible
-  (unordered SQL rows fed the fold shuffle, so two identical runs disagreed), and that one
-  shuffle is a lottery at this sample size. Both are fixed: runs are deterministic, every
-  headline number is now reported as a mean ±std across 5 shuffles, and **NDCG@k** joins
-  precision@k so the full `0/1/2` scale is actually used. This *lowered* the reported numbers,
-  which is the point.
+  The semantic feature was the model's largest coefficient and still did not improve the
+  ranking. Nothing here separates from anything else at this sample size. See
+  [Results](#results).
+- **The measurement was the real work.** Three defects, each of which had inflated the earlier
+  numbers: the evaluation was not reproducible (unordered SQL rows fed the fold shuffle, so two
+  identical runs disagreed), one shuffle is a lottery (precision@5 swings across a band 0.36
+  wide), and comparing methods by eyeballing overlapping intervals is simply the wrong test
+  (a **paired bootstrap** on the same resampled postings is). Fixing all three *lowered* the
+  headline numbers and dissolved the original conclusion, which is the point.
 - **Why the trained model is the one that matters.** The cosine baseline ranks by similarity
   to a profile I wrote by hand, so it can never learn from my actual decisions. The trained
   model did: it learned to *reject* `data engineer` despite reading almost identically to
@@ -137,19 +137,27 @@ deliberately excluded: a third of postings share one company, so company would p
 "this specific employer" rather than transferable signal, and salary is populated on <5% of
 postings.
 
-**Semantic feature (the key experiment).** On top of those, one more: the cosine similarity
+**Semantic feature.** On top of those, one more: the cosine similarity
 between each posting's embedding and my preference profile, min-max scaled on the *training
 fold only* (so it stays leakage-free and on the same 0-1 range as the rest, not over- or
 under-weighted by regularization). This deliberately hands the model the exact signal the
 cosine baseline uses, so it can *combine* semantics with the personal preferences the baseline
-can't learn. See [Results](#results).
+can't learn. It was for a time the headline result of this project. It does not hold up: see
+[Results](#results).
+
+**Description features.** A capped TF-IDF over the posting body (300 terms, `max_df=0.8` to
+strip boilerplate such as benefits lists and equal-opportunity statements). The body was the one
+field never used as features, so the model read job *titles* but never what the job actually
+involved. Currently the most promising of the three feature experiments, and still not
+conclusive, so it ships behind `--description`.
 
 **Model.** L2-regularized multinomial logistic regression (one weight vector per class).
 Chosen as the baseline *because* it's simple and interpretable: with ~481 rows and 60-100
 engineered features, a higher-capacity model (LightGBM) would be easy to overfit and hard to
-justify before establishing how the simple baseline does. With the semantic feature it is
-competitive with the cosine heuristic (see Results), so the extra capacity, and lost
-interpretability, of a tree model still isn't warranted at this sample size.
+justify before establishing how the simple baseline does. Since no feature variant yet
+separates from the cosine heuristic (see Results), the extra capacity and lost interpretability
+of a tree model plainly isn't warranted at this sample size: there is no gap for it to close
+that could be measured if it did.
 
 **Validation.** Stratified 5-fold cross-validation, not a single train/test split. A single
 80/20 split on ~574 rows is highly sensitive to which rows land where; 5-fold rotation
@@ -220,107 +228,88 @@ has made. Precision@k remains the headline so earlier results stay comparable.
 
 ## Results
 
-Three rounds. Rounds 1 and 2 compare the trained model against the two untrained baselines and
-were measured at **509 labels, 481 English-only, on a single cross-validation shuffle**. Round 3
-re-examines the measurement itself and is the honest reading of the two tables above it.
+All methods scored on the same **574 labeled postings, 82 rated "yes"**, out-of-fold for the
+trained model. Every number carries a 95% bootstrap interval over resampled postings, so the
+uncertainty means the same thing in every row.
 
-> **Read rounds 1 and 2 as directional.** They predate the reproducibility fix and the
-> repeated-shuffle protocol described in [Methodology](#methodology), so their exact decimals
-> are not reproducible. The *ordering* of the three methods is the durable finding. Re-running
-> the full three-way benchmark at the current label count is
-> [pending](#future-work), because the cosine and LLM-judge arms need an embedding and judging
-> pass over every posting.
+### The honest headline
 
-### Round 1: hand-crafted features only
+**At this sample size, no method is reliably better than any other.** The trained model, the
+embedding baseline and every feature variant sit inside each other's intervals on every metric.
 
-| method | p@5 | p@10 | p@20 |
+| method | precision@10 | ndcg@10 | ndcg@20 |
 |---|---|---|---|
-| Cosine similarity (untrained) | 0.60 | **0.60** | **0.50** |
-| Logistic regression (hand-crafted features) | 0.60 | 0.50 | 0.45 |
-| LLM-as-judge | 0.40 | 0.30 | 0.40 |
+| Logistic regression + description | **0.62** [0.20-0.90] | **0.77** [0.42-0.97] | 0.73 [0.51-0.89] |
+| Cosine similarity (untrained) | 0.58 [0.30-0.90] | **0.77** [0.49-0.96] | **0.75** [0.56-0.90] |
+| Logistic regression (hand-crafted) | 0.60 [0.30-0.90] | 0.74 [0.37-0.96] | 0.72 [0.49-0.88] |
+| Logistic regression + semantic | 0.59 [0.20-0.90] | 0.73 [0.37-0.97] | 0.71 [0.51-0.87] |
 
-The trained model **lost** to a plain embedding-similarity baseline, behind at k=10 and 20,
-tied at k=5. Honest starting point: on scarce data, a well-scoped heuristic is a hard floor.
+precision@5 is omitted deliberately: its interval spans essentially [0.00-1.00], because it is
+computed from five postings. Any ranking of methods by precision@5 at this scale is noise.
 
-**Diagnosis, not assumption.** Cosine's edge is structural, "fit" lives in the *meaning* of a
-posting, which embeddings encode directly, while the model saw only hand-crafted features
-(skills, seniority, title n-grams) and never the semantic signal. So the fix was clear: give
-the model that signal.
+### Comparing methods properly
 
-### Round 2: add the semantic feature
+Overlapping intervals do **not** mean two methods are equivalent. Those intervals are dominated
+by which postings the sample happened to contain, and every method faces that same luck. The
+right test is paired: resample once, score both methods on the *same* postings, and look at the
+distribution of the difference.
 
-Feed the cosine-similarity score into the model as one more leakage-free, scaled feature:
+| comparison (ndcg@10) | mean difference | A ahead in |
+|---|---|---|
+| + description **vs** hand-crafted | +0.028 [-0.043, +0.099] | **79%** of resamples |
+| + description **vs** cosine similarity | +0.002 [-0.234, +0.279] | 48% of resamples |
+| + semantic **vs** hand-crafted | -0.009 [-0.051, +0.033] | **33%** of resamples |
 
-| method | p@5 | p@10 | p@20 |
-|---|---|---|---|
-| Logistic regression **+ semantic feature** | 0.80\* | 0.50 | 0.50 |
-| Cosine similarity (untrained) | 0.60 | 0.60 | 0.50 |
-| Logistic regression (hand-crafted only) | 0.60 | 0.50 | 0.45 |
+Three findings, in descending order of confidence:
 
-<sub>\*p@5 out-of-fold. Per-fold reliability: p@5 = 0.56 ± 0.23, p@20 = 0.35 ± 0.04. Read the top-k as a band, the p@5 jump is one extra correct posting and sits inside the noise.</sub>
+1. **The trained model and the embedding baseline are indistinguishable.** 48% of resamples, a
+   coin flip. Not a win, not a loss.
+2. **The semantic feature does not help, and mildly hurts.** It trails the plain hand-crafted
+   model in two thirds of resamples (only 33% ahead on ndcg@10, 23% on precision@10). This
+   *contradicts* the earlier result below, and is the clearest example of why the measurement
+   changes mattered.
+3. **The description features are consistently but not conclusively positive.** Ahead in 73-79%
+   of resamples across all three NDCG cutoffs. A real direction, well short of proof, which is
+   why they ship behind `--description` rather than on by default.
 
-The model closed the gap from losing to a **wash** (now wins p@5, ties p@20, trails only at
-p@10), and it made the semantic feature its **single strongest coefficient** (2.69, ahead of
-even `data scientist` at 2.58). The model doesn't merely tolerate the signal, it relies on it
-more than any hand-crafted feature.
+### What this replaced, and why it is worth showing
 
-**Honest caveats.** This is a wash, not a decisive win: at this sample size precision@k is
-coarse (p@5 swings ±0.23 across folds), so the claim is "caught up," not "beat it." The gain
-is modest partly because the semantic feature *overlaps* with the title n-grams the model
-already had (useful, but partly redundant). And a couple of learned coefficients (`Scala`,
-`title:risk` toward yes) are almost certainly small-sample artifacts.
+An earlier version of this benchmark, at 509 labels on a **single** cross-validation shuffle,
+told a cleaner story: the model lost to cosine similarity on hand-crafted features, then adding
+the semantic feature lifted precision@5 from 0.60 to 0.80 and closed the gap. The semantic
+feature became the model's single largest coefficient, which seemed to confirm it.
 
-### Round 3: separating signal from noise
+Almost none of that survived better measurement, and the ways it failed are each instructive:
 
-The rounds above each rest on one cross-validation shuffle. Round 3 asks how much of that
-survives repetition. Same model, same features, but the whole procedure repeated under 5
-shuffles and reported as mean ± std, at the current **610 labels, 574 English-only**:
-
-| method (5 shuffles, out-of-fold) | p@5 | p@10 | p@20 | ndcg@5 | ndcg@10 | ndcg@20 |
-|---|---|---|---|---|---|---|
-| Logistic regression (hand-crafted features) | 0.60 ±0.18 | 0.62 ±0.07 | 0.51 ±0.02 | 0.71 ±0.21 | 0.74 ±0.12 | 0.71 ±0.05 |
-| ... **+ description TF-IDF** | 0.68 ±0.16 | 0.66 ±0.10 | 0.50 ±0.03 | 0.76 ±0.19 | 0.78 ±0.12 | 0.72 ±0.06 |
-
-**The headline finding is about the error bars, not the means.** p@5 carries a standard
-deviation of ±0.18. A single run can land anywhere from roughly 0.42 to 0.78 with nothing
-changing but the shuffle, which is why the single-shuffle 0.80 reported in Round 2 should not
-be read as a decimal. Every future claim of the form "X beats Y" has to clear that band or it
-is noise. p@20 and ndcg@20 are far steadier (±0.02 to ±0.06), simply because ranking 20 of 574
-is a less twitchy question than ranking 5.
-
-**A third feature experiment: the description text.** The model read job *titles* but never the
-posting body, the one field never used as features. Adding a capped TF-IDF over the description
-(300 features, `max_df=0.8` to strip boilerplate like benefits lists and equal-opportunity
-statements) is the cheapest untried idea, so it was measured rather than assumed. At ~535
-labels it was a dead wash. At 610 it is ahead on five of six metrics, but every gap still sits
-inside one standard deviation, so the honest verdict is **"promising, not proven"**. It ships
-behind `--description`, off by default, precisely because the bar is "clears the noise band",
-not "has a bigger mean". It is worth re-measuring as labels accumulate: the direction moving
-consistently as the dataset grew by 75 labels is what you would expect from a real but
-currently under-powered signal.
-
-**Time-based split.** Training on the 459 earliest labels and testing on the 115 rated after
-2026-08-13 gives p@5 0.80, p@10 0.80, ndcg@5 0.85. Encouraging, and closer to how the digest is
-actually used, but it is a *single* split and therefore carries the same noise caveat as
-anything else here.
+- **The evaluation was not reproducible.** A `SELECT` without `ORDER BY` let SQLite return rows
+  in an arbitrary order, which fed both the fold shuffle and every tie-break. Two identical runs
+  disagreed.
+- **One shuffle is a lottery.** Repeating the cross-validation across 5 shuffles put precision@5
+  in a band roughly 0.36 wide. The 0.80 was a friendly draw from it.
+- **A large coefficient is not an improvement.** The semantic feature genuinely was the model's
+  biggest weight, and the model genuinely did lean on it. It still did not rank better, which is
+  the distinction that matters and the one the original write-up missed.
+- **precision@k alone was the wrong lens.** It scores a *maybe* exactly like a *no* and cannot
+  tell a well-ordered top five from the same five shuffled. NDCG@k, added alongside, is what
+  showed the description features moving consistently while precision@k looked flat.
 
 ### Why the trained model is still the right tool
 
-Two things it does that a similarity baseline structurally **cannot**:
+Being tied with a similarity heuristic is not the same as being redundant. Two things it does
+that a frozen baseline structurally **cannot**:
 
-1. **It learns my contradictions.** Its coefficients recovered my real preferences from labels
-   alone, *toward yes:* `data scientist`, `machine learning`, `Python`, `LLMs`; *toward no:*
-   `data engineer`, `devops`, `thesis`, `C#`. It learned to reject `data engineer` even though
-   it reads almost identically to `data scientist`. Cosine can't tell them apart.
+1. **It learns contradictions.** Its coefficients recovered real preferences from labels alone,
+   *toward yes:* `data scientist`, `machine learning`, `ai`, `deep`; *toward no:* `data
+   engineer`, `devops`, `thesis`, `C#`. It rejects `data engineer` despite it reading almost
+   identically to `data scientist`. Cosine cannot tell them apart at all.
 2. **It improves with data.** The cosine baseline is frozen, equally good at 500 labels or
-   5,000. The trained model climbs as I label more, which is why more data (below) is the top
-   lever, and why a wash today is expected to become a win.
+   5,000. The trained model climbs, which is why more labels is the top lever and why a tie
+   today is not a tie forever.
 
-Given the semantic signal, the trained model is competitive with the baseline it used to lose
-to *and* is the only method that learns personal taste and improves over time. Pushing it to a
-decisive win is [future work](#future-work).
-
----
+It also surfaced something no heuristic would have: with description features on, it had learned
+German function words as a signal for "no". That was a real preference being expressed through a
+proxy, and it led directly to finding that the language filter was missing postings *written* in
+another language while only catching those that *named* a requirement.
 
 ## Future work
 
@@ -329,19 +318,25 @@ standard deviation, which is wide enough to swallow most feature experiments who
 question below is really the same question: is the dataset big enough to answer it yet?
 Labeling is ongoing, now ordered by model uncertainty so each label buys more than it used to.
 
-**Re-run the three-way benchmark.** Rounds 1 and 2 date from 509 labels and a single shuffle.
-Re-running the trained model against LLM-as-judge and cosine similarity under the repeated
-shuffle protocol is the direct next step, deferred only because both baselines need a full
-embedding and judging pass over every posting.
+**Refresh the LLM-as-judge arm.** The trained, semantic, description and cosine rows are all
+current at 574 labels. The LLM-judge row is not: it needs a judging pass over every posting,
+roughly one to three hours of local inference, and has not been re-run since 509 labels.
 
-**Settle the description-TF-IDF question.** Currently "promising, not proven" (Round 3): ahead
-on five of six metrics, all inside one standard deviation. It flips to on-by-default the moment
-it clears the noise band, and not before.
+**Settle the description-TF-IDF question.** Currently "promising, not proven": ahead of the
+hand-crafted model in 73-79% of paired resamples across all three NDCG cutoffs, which is a real
+direction but short of the 95% that would settle it. It flips to on-by-default the moment it
+clears that bar, and not before.
 
-**Full embedding vector as features.** Round 2 added one *summarized* semantic number (cosine
-to the profile). Feeding the model the raw embedding vector gives it the full semantic space to
-combine with personal preferences, more power, though more overfitting risk at this sample
-size, so it's an experiment to measure, not assume.
+**Work out how much data would settle any of this.** Every open question above is really the
+same question, and a power analysis would turn "we need more labels" into a number: given the
+observed effect sizes, how many labels before a difference this size becomes resolvable? That
+is more useful than continuing to label blindly.
+
+**Full embedding vector as features.** The semantic experiment fed the model one *summarized*
+number (cosine to the profile), and it did not help. Feeding the raw embedding vector instead
+gives it the full semantic space rather than a single projection of it, though with far more
+overfitting risk at this sample size. An experiment to measure, not assume, and one that should
+now be judged by paired bootstrap rather than a single split.
 
 **LightGBM, once data allows.** A tree model only earns the swap from the interpretable
 logistic regression if it actually beats it on the benchmark, more justified as the dataset
@@ -452,7 +447,7 @@ python -m orchestrator                # the whole pipeline: scrape -> extract ->
 
 `ranking.baseline` also takes `--semantic` (the embedding feature, needs Ollama),
 `--description` (TF-IDF over the posting body, off by default, see
-[Round 3](#round-3-separating-signal-from-noise)) and `--time-split`.
+[Results](#results)) and `--time-split`.
 
 `orchestrator.py` drives the two Java stages through Gradle and then ranks, so
 one command goes from "nothing scraped today" to a shortlist. It continues past a
