@@ -93,9 +93,15 @@ CREATE TABLE IF NOT EXISTS scrape_runs (
     company TEXT,
     started_at TEXT NOT NULL,      -- ISO 8601, also the cutoff for closing stale postings
     finished_at TEXT NOT NULL,
-    fetched INTEGER NOT NULL DEFAULT 0,   -- postings the board returned, before filtering
+    fetched INTEGER NOT NULL DEFAULT 0,   -- postings the board holds in total, before ANY
+                                          -- filtering. Comparable across sources, which is
+                                          -- the point: 0 here means the board is empty or
+                                          -- the token is wrong, never merely that nothing
+                                          -- matched
     accepted INTEGER NOT NULL DEFAULT 0,  -- passed every filter and were stored
-    rejected INTEGER NOT NULL DEFAULT 0,  -- returned but filtered out
+    rejected INTEGER NOT NULL DEFAULT 0,  -- fetched in full and then rejected. The remainder,
+                                          -- fetched minus accepted minus rejected, is what the
+                                          -- cheap title pre-filter dropped without a detail fetch
     error TEXT                     -- NULL on success, the failure message otherwise
 );
 

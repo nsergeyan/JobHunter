@@ -178,6 +178,7 @@ public class LeverScraper extends BaseScraper {
                     scrape.failed("response contained no jobs array -- the board's shape may have changed");
                     continue;
                 }
+                scrape.boardReturned(jobs.size());
                 for (JsonNode job : jobs) {
                     String title = job.path("text").asText("");
                     scrape.listed(externalIdOf(job));

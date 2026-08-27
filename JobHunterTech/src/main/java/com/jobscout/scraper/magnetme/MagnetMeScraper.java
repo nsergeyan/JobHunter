@@ -19,6 +19,7 @@ import org.jsoup.select.Elements;
 
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.function.IntConsumer;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.regex.Matcher;
@@ -64,9 +65,16 @@ public class MagnetMeScraper extends BaseScraper {
 
     /** Sitemap URL slugs read like plain job titles, so the shared title pre-filter applies directly. */
     public List<String> fetchCandidateUrls() {
+        return fetchCandidateUrls(total -> { });
+    }
+
+    /** As above, but reports how many URLs the sitemap held before the title filter. */
+    public List<String> fetchCandidateUrls(IntConsumer sitemapTotal) {
         String xml = fetcher.get(SITEMAP_URL);
         List<String> candidates = new ArrayList<>();
-        for (String url : SitemapReader.readLocs(xml)) {
+        List<String> allUrls = SitemapReader.readLocs(xml);
+        sitemapTotal.accept(allUrls.size());
+        for (String url : allUrls) {
             if (ScraperPatterns.isCandidateTitle(url) && EXCLUDED_URL_SUFFIXES.stream().noneMatch(url::endsWith)) {
                 candidates.add(url);
             }
@@ -112,7 +120,7 @@ public class MagnetMeScraper extends BaseScraper {
             try {
                 // Hoisted out of the for-each header, where a sitemap failure
                 // propagated straight out of run().
-                candidateUrls = fetchCandidateUrls();
+                candidateUrls = fetchCandidateUrls(scrape::boardReturned);
             } catch (ScraperException exc) {
                 scrape.failed(exc.getMessage());
                 System.out.println("Skipping Magnet.me: " + exc.getMessage());

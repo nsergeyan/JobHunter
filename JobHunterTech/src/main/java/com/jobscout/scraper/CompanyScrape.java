@@ -42,9 +42,25 @@ public final class CompanyScrape implements AutoCloseable {
         this.startedAt = Instant.now().toString();
     }
 
-    /** A posting the board returned, before any filtering. */
+    /**
+     * How many postings the board returned, before ANY filtering.
+     *
+     * Set explicitly rather than counted as postings go by, because the two-step
+     * scrapers apply the title filter while paging and so never iterate the full
+     * listing. Counting what they iterate made `fetched` mean "postings worth a
+     * detail fetch" for them and "everything the board has" for the others, which
+     * quietly made the two incomparable: a company showing 0 could equally mean a
+     * dead board or a healthy board with nothing matching.
+     */
+    public void boardReturned(int postings) {
+        fetched = postings;
+    }
+
+    /**
+     * A posting still present on the board. Refreshes last_seen so it is not later
+     * mistaken for one that has closed. Does not count toward `fetched`.
+     */
     public void listed(String externalId) {
-        fetched++;
         VacancyRepository.touchLastSeen(conn, source, externalId);
     }
 

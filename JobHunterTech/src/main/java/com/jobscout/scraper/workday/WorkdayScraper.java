@@ -16,6 +16,7 @@ import com.jobscout.scraper.TargetRegion;
 
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.function.IntConsumer;
 import java.util.List;
 
 /**
@@ -68,6 +69,15 @@ public class WorkdayScraper extends BaseScraper {
 
     /** Returns (title, externalPath) pairs for postings that pass the relevance + seniority filters. */
     public List<JobListing> fetchCandidateJobs(WorkdayCompany company) {
+        return fetchCandidateJobs(company, total -> { });
+    }
+
+    /**
+     * As above, but reports how many postings the board holds in total, before the
+     * title filter. The caller needs that to tell a broken board from a working one
+     * with nothing relevant on it.
+     */
+    public List<JobListing> fetchCandidateJobs(WorkdayCompany company, IntConsumer boardTotal) {
         List<JobListing> candidates = new ArrayList<>();
         int offset = 0;
         // Workday reports a truthful "total" only on the first page (offset 0); later
@@ -83,6 +93,7 @@ public class WorkdayScraper extends BaseScraper {
 
             if (total < 0) {
                 total = response.path("total").asInt(0);
+                boardTotal.accept(total);
             }
             JsonNode postings = response.path("jobPostings");
             int returned = postings.isArray() ? postings.size() : 0;
@@ -154,7 +165,7 @@ public class WorkdayScraper extends BaseScraper {
                 try {
                     // Hoisted out of the for-each header, where a failure propagated
                     // straight out of run() and abandoned every remaining company.
-                    listings = fetchCandidateJobs(company);
+                    listings = fetchCandidateJobs(company, scrape::boardReturned);
                 } catch (ScraperException exc) {
                     scrape.failed(exc.getMessage());
                     System.out.println("Skipping " + company.company() + ": " + exc.getMessage());

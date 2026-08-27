@@ -16,6 +16,7 @@ import com.jobscout.scraper.TargetRegion;
 
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.function.IntConsumer;
 import java.util.List;
 import java.util.Set;
 
@@ -69,6 +70,16 @@ public class SmartRecruitersScraper extends BaseScraper {
 
     /** Returns (title, id) pairs for postings that pass the relevance + experienceLevel pre-filter. */
     public List<JobListing> fetchCandidateJobs(SmartRecruitersCompany company) {
+        return fetchCandidateJobs(company, total -> { });
+    }
+
+    /**
+     * As above, but reports how many postings the board holds in total, before the
+     * title filter. The caller needs that to tell a broken board from a working one
+     * with nothing relevant on it, which matters here especially: a wrong company
+     * identifier returns 0 postings with no error at all.
+     */
+    public List<JobListing> fetchCandidateJobs(SmartRecruitersCompany company, IntConsumer boardTotal) {
         List<JobListing> candidates = new ArrayList<>();
         int offset = 0;
         int total = Integer.MAX_VALUE;
@@ -78,7 +89,11 @@ public class SmartRecruitersScraper extends BaseScraper {
                     + "/postings?offset=" + offset + "&limit=" + pageSize;
             JsonNode response = parse(fetcher.get(url), url);
 
+            boolean firstPage = total == Integer.MAX_VALUE;
             total = response.path("totalFound").asInt(0);
+            if (firstPage) {
+                boardTotal.accept(total);
+            }
             // Same reasoning as WorkdayScraper: a large company's raw listing can take
             // many rate-limited pages, and this loop had no logging -- silent for minutes.
             System.out.println(company.company() + ": fetched postings " + offset + "-"
@@ -136,7 +151,7 @@ public class SmartRecruitersScraper extends BaseScraper {
                 try {
                     // Hoisted out of the for-each header, where a failure propagated
                     // straight out of run() and abandoned every remaining company.
-                    listings = fetchCandidateJobs(company);
+                    listings = fetchCandidateJobs(company, scrape::boardReturned);
                 } catch (ScraperException exc) {
                     scrape.failed(exc.getMessage());
                     System.out.println("Skipping " + company.company() + ": " + exc.getMessage());
