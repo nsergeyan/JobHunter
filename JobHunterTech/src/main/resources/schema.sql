@@ -72,5 +72,9 @@ CREATE TABLE IF NOT EXISTS seen_postings (
     external_id TEXT NOT NULL,     -- SmartRecruiters posting id, or Workday externalPath
     accepted INTEGER NOT NULL,     -- 1 if it passed filters and was stored, 0 if rejected
     seen_at TEXT NOT NULL,         -- ISO 8601 timestamp of the first evaluation
+    filter_version INTEGER,        -- which FilterVersion.CURRENT produced this verdict -- a
+                                    -- posting counts as seen only when this matches the
+                                    -- version running now, so loosening a scrape-time filter
+                                    -- re-opens everything it previously rejected
     PRIMARY KEY (source, external_id)
 );

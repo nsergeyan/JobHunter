@@ -1,7 +1,6 @@
 package com.jobscout.scraper.magnetme;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.jobscout.db.SeenPostingRepository;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
@@ -96,7 +95,7 @@ public class MagnetMeScraper extends BaseScraper {
         for (String url : fetchCandidateUrls()) {
             // Already evaluated (accepted or rejected) on a previous run -- skip the
             // page fetch entirely. The sitemap can list thousands of URLs.
-            if (SeenPostingRepository.isSeen(conn, sourceName(), url)) {
+            if (alreadyEvaluated(conn, url)) {
                 continue;
             }
 
@@ -111,14 +110,14 @@ public class MagnetMeScraper extends BaseScraper {
             JsonNode posting = JobPostingHtml.extractJobPosting(html);
             if (posting == null) {
                 System.out.println("Skipping " + url + ": no JobPosting data found on page");
-                SeenPostingRepository.markSeen(conn, sourceName(), url, false);
+                recordEvaluation(conn, url, false);
                 continue;
             }
 
             String country = posting.path("jobLocation").path("address").path("addressCountry").asText(null);
             if (country != null && !TargetRegion.isInScopeByCountryCode(country)) {
                 System.out.println("Skipping " + url + ": outside Europe (" + country + ")");
-                SeenPostingRepository.markSeen(conn, sourceName(), url, false);
+                recordEvaluation(conn, url, false);
                 continue;
             }
 
@@ -127,20 +126,20 @@ public class MagnetMeScraper extends BaseScraper {
                     .anyMatch(lang -> lang.strip().equalsIgnoreCase("dutch"));
             if (requiresDutch) {
                 System.out.println("Skipping " + url + ": requires Dutch (" + String.join(", ", requiredLanguages) + ")");
-                SeenPostingRepository.markSeen(conn, sourceName(), url, false);
+                recordEvaluation(conn, url, false);
                 continue;
             }
 
             String rawText = JobPostingHtml.cleanDescription(posting);
             if (SeniorityFilter.isSeniorRole(rawText)) {
                 System.out.println("Skipping " + url + ": description indicates a senior role");
-                SeenPostingRepository.markSeen(conn, sourceName(), url, false);
+                recordEvaluation(conn, url, false);
                 continue;
             }
 
             if (SeniorityFilter.requiresTooMuchExperience(rawText)) {
                 System.out.println("Skipping " + url + ": requires more than 2 years of experience");
-                SeenPostingRepository.markSeen(conn, sourceName(), url, false);
+                recordEvaluation(conn, url, false);
                 continue;
             }
 
@@ -149,12 +148,12 @@ public class MagnetMeScraper extends BaseScraper {
                 vacancy = toVacancy(url, posting);
             } catch (NoSuchElementException exc) {
                 System.out.println("Skipping malformed posting at " + url + ": " + exc.getMessage());
-                SeenPostingRepository.markSeen(conn, sourceName(), url, false);
+                recordEvaluation(conn, url, false);
                 continue;
             }
 
             VacancyRepository.upsertVacancy(conn, vacancy);
-            SeenPostingRepository.markSeen(conn, sourceName(), url, true);
+            recordEvaluation(conn, url, true);
             count++;
         }
         return count;

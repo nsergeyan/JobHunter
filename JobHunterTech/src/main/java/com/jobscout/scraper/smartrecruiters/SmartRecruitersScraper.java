@@ -2,7 +2,6 @@ package com.jobscout.scraper.smartrecruiters;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jobscout.db.SeenPostingRepository;
 import com.jobscout.db.VacancyRecord;
 import com.jobscout.db.VacancyRepository;
 import com.jobscout.scraper.BaseScraper;
@@ -143,7 +142,7 @@ public class SmartRecruitersScraper extends BaseScraper {
             for (JobListing listing : fetchCandidateJobs(company)) {
                 // Already evaluated (accepted or rejected) on a previous run -- skip the
                 // detail fetch entirely rather than re-requesting and re-filtering it.
-                if (SeenPostingRepository.isSeen(conn, sourceName(), listing.id())) {
+                if (alreadyEvaluated(conn, listing.id())) {
                     continue;
                 }
 
@@ -157,7 +156,7 @@ public class SmartRecruitersScraper extends BaseScraper {
 
                 if (!isInTargetRegion(detail)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title() + "\": outside Europe");
-                    SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), false);
+                    recordEvaluation(conn, listing.id(), false);
                     continue;
                 }
 
@@ -165,20 +164,20 @@ public class SmartRecruitersScraper extends BaseScraper {
                 if (SeniorityFilter.isSeniorRole(description)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title()
                             + "\": description indicates a senior role");
-                    SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), false);
+                    recordEvaluation(conn, listing.id(), false);
                     continue;
                 }
 
                 if (SeniorityFilter.requiresTooMuchExperience(description)) {
                     System.out.println("Skipping " + company.company() + " \"" + listing.title()
                             + "\": requires more than 2 years of experience");
-                    SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), false);
+                    recordEvaluation(conn, listing.id(), false);
                     continue;
                 }
 
                 VacancyRecord vacancy = toVacancy(company, listing, detail);
                 VacancyRepository.upsertVacancy(conn, vacancy);
-                SeenPostingRepository.markSeen(conn, sourceName(), listing.id(), true);
+                recordEvaluation(conn, listing.id(), true);
                 count++;
             }
         }

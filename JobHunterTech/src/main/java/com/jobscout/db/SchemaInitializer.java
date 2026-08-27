@@ -43,6 +43,12 @@ public final class SchemaInitializer {
             addColumnIfMissing(conn, "vacancy_extractions", "salary_period", "TEXT");
             addColumnIfMissing(conn, "vacancy_extractions", "summary", "TEXT");
             addColumnIfMissing(conn, "vacancies", "external_id", "TEXT");
+            addColumnIfMissing(conn, "seen_postings", "filter_version", "INTEGER");
+            // Rows written before this column existed were judged by the filters as they
+            // stood then, which is version 1 -- backfill instead of leaving them NULL, so
+            // upgrading doesn't silently trigger a detail-fetch of every posting ever
+            // rejected. Re-checking those is a deliberate act: bump FilterVersion.CURRENT.
+            stmt.executeUpdate("UPDATE seen_postings SET filter_version = 1 WHERE filter_version IS NULL");
             // Real job identity. Created here (not in schema.sql) so it runs AFTER the
             // column migration above -- on an upgraded DB the column doesn't exist while
             // schema.sql is executing. IF NOT EXISTS makes it a no-op once present.
