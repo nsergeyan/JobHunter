@@ -385,13 +385,19 @@ def repeated_cross_validate(
         "precision": {5: [], 10: [], 20: []},
         "ndcg": {5: [], 10: [], 20: []},
     }
+    # Each seed's full out-of-fold score vector rides along, so callers can bootstrap
+    # over postings as well as over shuffles. Those are two different sources of
+    # uncertainty and a fair comparison against an untrained baseline needs both.
+    oof_by_seed: list[np.ndarray] = []
     for seed in seeds:
         results = cross_validate(df, y_original, use_description, random_state=seed)
+        oof_by_seed.append(results["oof_scores"])
         ranked_true = y_original[np.argsort(-results["oof_scores"], kind="stable")]
         for k in per_seed["precision"]:
             if k <= len(ranked_true):
                 per_seed["precision"][k].append(precision_at_k(ranked_true, k))
                 per_seed["ndcg"][k].append(ndcg_at_k(ranked_true, k))
+    per_seed["oof_scores"] = oof_by_seed
     return per_seed
 
 
