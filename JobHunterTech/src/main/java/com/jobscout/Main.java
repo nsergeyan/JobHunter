@@ -8,6 +8,8 @@ import com.jobscout.scraper.greenhouse.GreenhouseScraper;
 import com.jobscout.scraper.lever.LeverScraper;
 import com.jobscout.scraper.magnetme.MagnetMeScraper;
 import com.jobscout.scraper.smartrecruiters.SmartRecruitersScraper;
+import com.jobscout.scraper.CompanyRegistry;
+import com.jobscout.scraper.workday.WorkdayCompany;
 import com.jobscout.scraper.workday.WorkdayScraper;
 import io.github.cdimascio.dotenv.Dotenv;
 
@@ -74,7 +76,23 @@ public final class Main {
         HttpFetcher fetcher = new JdkHttpFetcher();
 
         Map<String, ScraperJob> jobs = new LinkedHashMap<>();
-        jobs.put("Workday", conn -> new WorkdayScraper(fetcher).run(conn));
+
+        // Workday is split one job per company, unlike every other platform. The
+        // reason is where the companies live: Greenhouse's 72 companies all sit
+        // behind boards-api.greenhouse.io, and Ashby's behind api.ashbyhq.com, so
+        // per-host pacing serialises them no matter how many threads exist and extra
+        // ones would only add overhead. Workday gives every tenant its own host
+        // (ing.wd3, asml.wd3, nvidia.wd5 ...), so those genuinely can overlap, each
+        // still getting its own full delay. With 16 tenants paging 20 postings at a
+        // time this is the difference between roughly 45 minutes and roughly 5.
+        for (WorkdayCompany company : CompanyRegistry.load("workday", entry -> new WorkdayCompany(
+                CompanyRegistry.requiredField(entry, "company"),
+                CompanyRegistry.requiredField(entry, "host"),
+                CompanyRegistry.requiredField(entry, "tenant"),
+                CompanyRegistry.requiredField(entry, "site")))) {
+            jobs.put("Workday/" + company.company(),
+                    conn -> new WorkdayScraper(fetcher, List.of(company)).run(conn));
+        }
         jobs.put("Greenhouse", conn -> new GreenhouseScraper(fetcher).run(conn));
         jobs.put("Ashby", conn -> new AshbyScraper(fetcher).run(conn));
         jobs.put("Lever", conn -> new LeverScraper(fetcher).run(conn));
@@ -83,22 +101,30 @@ public final class Main {
 
         // SCRAPER_SOURCES narrows the run to a comma-separated subset, matched on the
         // labels above, case-insensitively. Useful when one board is misbehaving and
-        // you want to iterate on it without waiting out the other five, and for
-        // smoke-testing a change without pulling a whole sitemap.
+        // you want to iterate on it without waiting out the others, and for
+        // smoke-testing a change without pulling a whole sitemap. "Workday" matches
+        // every Workday/<company> job, so the platform name still works as a whole.
         String only = env("SCRAPER_SOURCES", "");
         if (!only.isBlank()) {
             List<String> wanted = Arrays.stream(only.split(","))
                     .map(s -> s.strip().toLowerCase(Locale.ROOT))
                     .filter(s -> !s.isEmpty())
                     .toList();
-            jobs.keySet().removeIf(label -> !wanted.contains(label.toLowerCase(Locale.ROOT)));
+            jobs.keySet().removeIf(label -> {
+                String lower = label.toLowerCase(Locale.ROOT);
+                String platform = lower.contains("/") ? lower.substring(0, lower.indexOf('/')) : lower;
+                return !wanted.contains(lower) && !wanted.contains(platform);
+            });
             if (jobs.isEmpty()) {
                 throw new IllegalStateException("SCRAPER_SOURCES='" + only + "' matched no scrapers. "
                         + "Known names: Workday, Greenhouse, Ashby, Lever, SmartRecruiters, Magnet.me");
             }
         }
 
-        int parallelism = Math.max(1, Integer.parseInt(env("SCRAPER_PARALLELISM", "4")));
+        // Raised from 4 now that Workday contributes one job per tenant. These
+        // threads spend nearly all their time waiting on the rate limiter or the
+        // network, so the count can comfortably exceed the core count.
+        int parallelism = Math.max(1, Integer.parseInt(env("SCRAPER_PARALLELISM", "8")));
         System.out.println("Running " + jobs.size() + " scrapers with parallelism " + parallelism
                 + " (per-host pacing still applies)");
 
