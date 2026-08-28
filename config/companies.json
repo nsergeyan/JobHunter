@@ -424,6 +424,18 @@
       "host": "unilever.wd3.myworkdayjobs.com",
       "tenant": "unilever",
       "site": "Unilever_Early_Careers"
+    },
+    {
+      "company": "Accenture",
+      "host": "accenture.wd103.myworkdayjobs.com",
+      "tenant": "accenture",
+      "site": "AccentureCareers"
+    },
+    {
+      "company": "Avanade",
+      "host": "accenture.wd103.myworkdayjobs.com",
+      "tenant": "accenture",
+      "site": "AvanadeCareers"
     }
   ],
   "ashby": [
