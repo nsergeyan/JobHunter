@@ -274,6 +274,18 @@
     {
       "company": "Imbue",
       "boardToken": "imbue"
+    },
+    {
+      "company": "Flow Traders",
+      "boardToken": "flowtraders"
+    },
+    {
+      "company": "Isomorphic Labs",
+      "boardToken": "isomorphiclabs"
+    },
+    {
+      "company": "Da Vinci Derivatives",
+      "boardToken": "davinciderivatives"
     }
   ],
   "workday": [
@@ -500,6 +512,18 @@
     {
       "company": "Pleo",
       "boardName": "pleo"
+    },
+    {
+      "company": "n8n",
+      "boardName": "n8n"
+    },
+    {
+      "company": "poolside",
+      "boardName": "poolside"
+    },
+    {
+      "company": "Weaviate",
+      "boardName": "weaviate"
     }
   ],
   "lever": [
