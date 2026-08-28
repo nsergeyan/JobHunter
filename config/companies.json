@@ -436,6 +436,30 @@
       "host": "accenture.wd103.myworkdayjobs.com",
       "tenant": "accenture",
       "site": "AvanadeCareers"
+    },
+    {
+      "company": "DataRobot",
+      "host": "datarobot.wd1.myworkdayjobs.com",
+      "tenant": "datarobot",
+      "site": "DataRobot_External_Careers"
+    },
+    {
+      "company": "Applied Materials",
+      "host": "amat.wd1.myworkdayjobs.com",
+      "tenant": "amat",
+      "site": "External"
+    },
+    {
+      "company": "Autodesk",
+      "host": "autodesk.wd1.myworkdayjobs.com",
+      "tenant": "autodesk",
+      "site": "Ext"
+    },
+    {
+      "company": "Broadcom",
+      "host": "broadcom.wd1.myworkdayjobs.com",
+      "tenant": "broadcom",
+      "site": "External_Career"
     }
   ],
   "ashby": [
