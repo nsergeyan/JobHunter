@@ -236,10 +236,6 @@
       "boardToken": "cabify"
     },
     {
-      "company": "Pleo",
-      "boardToken": "pleo"
-    },
-    {
       "company": "Dashlane",
       "boardToken": "dashlane"
     },
@@ -504,6 +500,10 @@
     {
       "company": "Pinecone",
       "boardName": "pinecone"
+    },
+    {
+      "company": "Pleo",
+      "boardName": "pleo"
     }
   ],
   "lever": [
