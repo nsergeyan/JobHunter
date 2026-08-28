@@ -394,10 +394,6 @@
       "boardName": "hrt"
     },
     {
-      "company": "Cubist",
-      "boardName": "cubist"
-    },
-    {
       "company": "Bolt",
       "boardName": "bolt"
     },
@@ -530,10 +526,6 @@
     {
       "company": "Malt",
       "siteToken": "malt"
-    },
-    {
-      "company": "Atlassian",
-      "siteToken": "atlassian"
     },
     {
       "company": "Agicap",
