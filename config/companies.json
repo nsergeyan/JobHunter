@@ -354,6 +354,18 @@
       "host": "priceline.wd1.myworkdayjobs.com",
       "tenant": "priceline",
       "site": "BookingHoldings"
+    },
+    {
+      "company": "NXP",
+      "host": "nxp.wd3.myworkdayjobs.com",
+      "tenant": "nxp",
+      "site": "careers"
+    },
+    {
+      "company": "Shell",
+      "host": "shell.wd3.myworkdayjobs.com",
+      "tenant": "shell",
+      "site": "ShellCareers"
     }
   ],
   "ashby": [
