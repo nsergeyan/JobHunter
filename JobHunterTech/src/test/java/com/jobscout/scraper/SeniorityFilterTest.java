@@ -47,4 +47,64 @@ class SeniorityFilterTest {
 
         assertFalse(SeniorityFilter.requiresTooMuchExperience("Two years of experience is a plus"));
     }
+
+    // --- description-side seniority, added after the "staff" incident ---------
+
+    /**
+     * The exact failure that motivated splitting these checks. Anthropic's postings
+     * all contain the word "staff" in boilerplate, and isSeniorRole rejected 16 of
+     * 16 European candidates on it, including two Fellows Program roles and two
+     * reinforcement learning roles in London.
+     */
+    private static final String ANTHROPIC_STYLE_BOILERPLATE =
+            "We are looking for a Research Engineer to join our reinforcement learning team. "
+            + "You will work alongside staff across the company on model training. "
+            + "Your hiring manager will guide onboarding, and you will lead individual "
+            + "projects end to end. We encourage applications from candidates at all levels.";
+
+    @Test
+    void ordinaryDescriptionProseIsNotTreatedAsSenior() {
+        // "staff", "manager" and "lead" all appear here as ordinary English.
+        assertFalse(SeniorityFilter.requiresTooMuchExperience(ANTHROPIC_STYLE_BOILERPLATE));
+    }
+
+    @Test
+    void responsibilityForOthersStillCountsAsSenior() {
+        // The bar stated without a number. "lead" alone must not trigger it, but
+        // leading a team must.
+        assertTrue(SeniorityFilter.requiresTooMuchExperience(
+                "You will lead a team of engineers building our payments platform."));
+        assertTrue(SeniorityFilter.requiresTooMuchExperience(
+                "The role involves mentoring junior developers across two squads."
+                    .replace("junior ", "")));
+        assertFalse(SeniorityFilter.requiresTooMuchExperience(
+                "You will lead this project from prototype to production."));
+    }
+
+    @Test
+    void experienceStatedAsProseStillCountsAsSenior() {
+        assertTrue(SeniorityFilter.requiresTooMuchExperience(
+                "We are after extensive experience with distributed systems."));
+        assertTrue(SeniorityFilter.requiresTooMuchExperience(
+                "You bring a proven track record of shipping ML products."));
+        assertTrue(SeniorityFilter.requiresTooMuchExperience(
+                "This is a senior-level position on the platform team."));
+    }
+
+    @Test
+    void aJuniorSignalStillDisablesEveryDescriptionCheck() {
+        // Dual-track postings must survive all three signals, not just the years one.
+        assertFalse(SeniorityFilter.requiresTooMuchExperience(
+                "Graduate scheme. You will lead a team eventually and need 5 years to reach "
+                + "principal-level, but we hire at entry-level."));
+    }
+
+    @Test
+    void isSeniorRoleIsStillCorrectOnTitles() {
+        // Unchanged, and still the right tool for the job it was left doing.
+        assertTrue(SeniorityFilter.isSeniorRole("Staff Software Engineer"));
+        assertTrue(SeniorityFilter.isSeniorRole("Engineering Manager"));
+        assertFalse(SeniorityFilter.isSeniorRole("Software Engineer"));
+        assertFalse(SeniorityFilter.isSeniorRole("Senior/Junior Data Scientist"));
+    }
 }

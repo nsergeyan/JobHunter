@@ -184,13 +184,6 @@ public class SmartRecruitersScraper extends BaseScraper {
                     }
 
                     String description = descriptionText(detail);
-                    if (SeniorityFilter.isSeniorRole(description)) {
-                        System.out.println("Skipping " + company.company() + " \"" + listing.title()
-                                + "\": description indicates a senior role");
-                        recordEvaluation(conn, listing.id(), false);
-                        scrape.filteredOut();
-                        continue;
-                    }
 
                     if (SeniorityFilter.requiresTooMuchExperience(description)) {
                         System.out.println("Skipping " + company.company() + " \"" + listing.title()

@@ -194,12 +194,6 @@ public class LeverScraper extends BaseScraper {
                     }
 
                     String description = descriptionText(job);
-                    if (SeniorityFilter.isSeniorRole(description)) {
-                        System.out.println("Skipping " + company.company() + " \"" + title
-                                + "\": description indicates a senior role");
-                        scrape.filteredOut();
-                        continue;
-                    }
 
                     if (SeniorityFilter.requiresTooMuchExperience(description)) {
                         System.out.println("Skipping " + company.company() + " \"" + title

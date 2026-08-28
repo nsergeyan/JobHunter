@@ -127,12 +127,6 @@ public class AshbyScraper extends BaseScraper {
                     }
 
                     String description = job.path("descriptionPlain").asText("");
-                    if (SeniorityFilter.isSeniorRole(description)) {
-                        System.out.println("Skipping " + company.company() + " \"" + title
-                                + "\": description indicates a senior role");
-                        scrape.filteredOut();
-                        continue;
-                    }
 
                     if (SeniorityFilter.requiresTooMuchExperience(description)) {
                         System.out.println("Skipping " + company.company() + " \"" + title

@@ -171,12 +171,6 @@ public class MagnetMeScraper extends BaseScraper {
                 }
 
                 String rawText = JobPostingHtml.cleanDescription(posting);
-                if (SeniorityFilter.isSeniorRole(rawText)) {
-                    System.out.println("Skipping " + url + ": description indicates a senior role");
-                    recordEvaluation(conn, url, false);
-                    scrape.filteredOut();
-                    continue;
-                }
 
                 if (SeniorityFilter.requiresTooMuchExperience(rawText)) {
                     System.out.println("Skipping " + url + ": requires more than 2 years of experience");
