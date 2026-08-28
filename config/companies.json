@@ -286,6 +286,22 @@
     {
       "company": "Da Vinci Derivatives",
       "boardToken": "davinciderivatives"
+    },
+    {
+      "company": "Neo4j",
+      "boardToken": "neo4j"
+    },
+    {
+      "company": "AssemblyAI",
+      "boardToken": "assemblyai"
+    },
+    {
+      "company": "Speechmatics",
+      "boardToken": "speechmatics"
+    },
+    {
+      "company": "Stability AI",
+      "boardToken": "stabilityai"
     }
   ],
   "workday": [
@@ -366,6 +382,24 @@
       "host": "shell.wd3.myworkdayjobs.com",
       "tenant": "shell",
       "site": "ShellCareers"
+    },
+    {
+      "company": "Cisco",
+      "host": "cisco.wd5.myworkdayjobs.com",
+      "tenant": "cisco",
+      "site": "Cisco_Careers"
+    },
+    {
+      "company": "Adobe",
+      "host": "adobe.wd5.myworkdayjobs.com",
+      "tenant": "adobe",
+      "site": "external_experienced"
+    },
+    {
+      "company": "Intel",
+      "host": "intel.wd1.myworkdayjobs.com",
+      "tenant": "intel",
+      "site": "External"
     }
   ],
   "ashby": [
@@ -536,6 +570,26 @@
     {
       "company": "Weaviate",
       "boardName": "weaviate"
+    },
+    {
+      "company": "Cerebras",
+      "boardName": "cerebras"
+    },
+    {
+      "company": "ClickHouse",
+      "boardName": "clickhouse"
+    },
+    {
+      "company": "Deepgram",
+      "boardName": "deepgram"
+    },
+    {
+      "company": "Hex",
+      "boardName": "hex"
+    },
+    {
+      "company": "Confluent",
+      "boardName": "confluent"
     }
   ],
   "lever": [

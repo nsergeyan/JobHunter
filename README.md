@@ -73,7 +73,7 @@ substance is everything before it.
 scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking model + benchmark (Python) → daily digest (Python)
 ```
 
-- **Scraping.** ~145 companies across 5 ATS platforms (Workday, Greenhouse, Lever, Ashby,
+- **Scraping.** ~160 companies across 5 ATS platforms (Workday, Greenhouse, Lever, Ashby,
   SmartRecruiters), each integrated against the platform's real posting API rather than a
   guessed URL slug or scraped HTML (several platforms return a convincing `200 OK` for a
   nonexistent company, which a naive slug-guessing approach silently miss-counts). Jobs are
@@ -431,7 +431,7 @@ reliable about market-wide patterns. The `closed_at` timestamps now accumulating
 ## Project structure
 
 ```
-config/companies.json    # the ~145 scraped companies, read at runtime (no recompile)
+config/companies.json    # the ~160 scraped companies, read at runtime (no recompile)
 JobHunterTech/           # Java: scraper, database, LLM extraction
 ├── build.gradle
 ├── src/main/java/com/jobscout/
