@@ -71,6 +71,7 @@ def format_screen(vacancy: db.VacancyToLabel, position: int, total: int, copies:
 
     lines = [
         f"[{position}/{total}]  {vacancy.company or '?'} — {vacancy.title}{duplicates}",
+        f"location: {vacancy.location or '—'}",
         f"seniority: {vacancy.seniority} | remote: {vacancy.remote_policy} | lang: {vacancy.language_requirement or '—'}",
         f"skills: {skills}",
         f"salary: {salary}",
