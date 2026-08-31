@@ -136,7 +136,16 @@ def load_unlabeled_vacancies(since_days: int | None = None) -> pd.DataFrame:
 # once and recovered is not worth reporting -- only one whose MOST RECENT attempt
 # failed is actually broken right now. SQLite's `IS` handles the NULL company used
 # by sources that are not scraped per company, where plain `=` would never match.
-LATEST_FAILURES_SQL = """
+#
+# Both queries are scoped to the most recent scrape session. A board dropped from
+# companies.json is never scraped again, and its final row is usually the failure
+# that got it dropped, so without this scoping, retiring a broken board makes it
+# haunt every future digest. julianday() rather than a string comparison because
+# finished_at carries microseconds and a trailing Z, which do not compare
+# correctly against a truncated cutoff.
+LATEST_RUN_CUTOFF_SQL = "(SELECT julianday(MAX(finished_at)) - 1 FROM scrape_runs)"
+
+LATEST_FAILURES_SQL = f"""
 SELECT source, company, error, finished_at
 FROM scrape_runs r
 WHERE r.finished_at = (
@@ -144,10 +153,14 @@ WHERE r.finished_at = (
     WHERE r2.source = r.source AND r2.company IS r.company
 )
 AND r.error IS NOT NULL
+AND julianday(r.finished_at) >= {LATEST_RUN_CUTOFF_SQL}
 ORDER BY r.source, r.company
 """
 
-COMPANY_COUNT_SQL = "SELECT COUNT(DISTINCT source || '/' || COALESCE(company, '')) AS n FROM scrape_runs"
+COMPANY_COUNT_SQL = (
+    "SELECT COUNT(DISTINCT source || '/' || COALESCE(company, '')) AS n "
+    f"FROM scrape_runs WHERE julianday(finished_at) >= {LATEST_RUN_CUTOFF_SQL}"
+)
 
 
 def load_scrape_health() -> tuple[pd.DataFrame, int]:
