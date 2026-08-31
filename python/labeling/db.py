@@ -24,6 +24,7 @@ SELECT v.id, v.title, v.company, v.location, v.raw_text,
 FROM vacancies v
 JOIN vacancy_extractions e ON e.vacancy_id = v.id
 WHERE v.id NOT IN (SELECT vacancy_id FROM labels)
+ORDER BY v.id
 """
 
 
@@ -152,6 +153,19 @@ def save_label_for_group(conn: sqlite3.Connection, vacancy_ids: list[int], label
 
 def delete_label(conn: sqlite3.Connection, vacancy_id: int) -> None:
     conn.execute("DELETE FROM labels WHERE vacancy_id = ?", (vacancy_id,))
+    conn.commit()
+
+
+def delete_label_for_group(conn: sqlite3.Connection, vacancy_ids: list[int]) -> None:
+    """Undo a rating that was written to every copy of a job.
+
+    Mirrors save_label_for_group: one keypress wrote several rows, so undo has to
+    remove all of them or the copies are left disagreeing.
+    """
+    conn.executemany(
+        "DELETE FROM labels WHERE vacancy_id = ?",
+        [(vacancy_id,) for vacancy_id in vacancy_ids],
+    )
     conn.commit()
 
 

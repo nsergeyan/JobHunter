@@ -24,7 +24,7 @@ import sys
 import termios
 import tty
 
-from labeling import db
+from labeling import db, dedup
 from ranking.active import uncertainty_by_vacancy_id
 from ranking.holdout import HOLDOUT_PERCENT, is_holdout
 
@@ -60,15 +60,17 @@ def read_key() -> str:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
-def format_screen(vacancy: db.VacancyToLabel, position: int, total: int) -> str:
+def format_screen(vacancy: db.VacancyToLabel, position: int, total: int, copies: int = 1) -> str:
     skills = ", ".join(json.loads(vacancy.skills)) if vacancy.skills else "(none extracted)"
 
     salary = "—"
     if vacancy.salary_min is not None:
         salary = f"{vacancy.salary_min}-{vacancy.salary_max} {vacancy.salary_currency or ''} ({vacancy.salary_period})"
 
+    duplicates = f"  ({copies} identical copies, one rating covers all)" if copies > 1 else ""
+
     lines = [
-        f"[{position}/{total}]  {vacancy.company or '?'} — {vacancy.title}",
+        f"[{position}/{total}]  {vacancy.company or '?'} — {vacancy.title}{duplicates}",
         f"seniority: {vacancy.seniority} | remote: {vacancy.remote_policy} | lang: {vacancy.language_requirement or '—'}",
         f"skills: {skills}",
         f"salary: {salary}",
@@ -170,26 +172,39 @@ def order_queue(unlabeled: list[db.VacancyToLabel], order: str) -> tuple[list[db
 
 def run(order: str = "uncertain") -> None:
     conn = db.connect()
-    unlabeled = order_queue(db.find_unlabeled(conn), order)
-    unlabeled, description = unlabeled
+
+    # Collapse before ordering, not after. The queue is a queue of jobs, not of
+    # rows: one screen per job, and the rating is written to every copy so no
+    # copy of it is ever offered again. Ordering the rows first and deduplicating
+    # afterwards would let the uncertainty sampler spend its budget ranking three
+    # copies of the same description against each other.
+    rows = db.find_unlabeled(conn)
+    groups = dedup.group_duplicates(rows)
+    copies_by_id = {group[-1].id: [v.id for v in group] for group in groups}
+    representatives = [group[-1] for group in groups]
+
+    unlabeled, description = order_queue(representatives, order)
     total = len(unlabeled)
 
-    last_labeled_id: int | None = None
+    last_labeled_ids: list[int] | None = None
     position = 0
 
-    print(f"{total} vacancies to label ({description}). Starting...\n")
+    collapsed = sum(len(ids) - 1 for ids in copies_by_id.values())
+    duplicates = f", {collapsed} duplicate copies folded in" if collapsed else ""
+    print(f"{total} vacancies to label ({description}{duplicates}). Starting...\n")
 
     while position < len(unlabeled):
         vacancy = unlabeled[position]
-        print(format_screen(vacancy, position + 1, total))
+        group = copies_by_id[vacancy.id]
+        print(format_screen(vacancy, position + 1, total, copies=len(group)))
 
         key = ""
         while key not in VALID_KEYS:
             key = read_key()
 
         if key in {"0", "1", "2"}:
-            db.save_label(conn, vacancy.id, int(key))
-            last_labeled_id = vacancy.id
+            db.save_label_for_group(conn, group, int(key))
+            last_labeled_ids = group
             position += 1
         elif key == "r":
             print("\n" + vacancy.raw_text + "\n")
@@ -197,10 +212,10 @@ def run(order: str = "uncertain") -> None:
         elif key == "s":
             position += 1  # leave unlabeled, moves on without recording anything
         elif key == "u":
-            if last_labeled_id is not None:
-                db.delete_label(conn, last_labeled_id)
+            if last_labeled_ids is not None:
+                db.delete_label_for_group(conn, last_labeled_ids)
                 position -= 1
-                last_labeled_id = None
+                last_labeled_ids = None
                 print("\nUndone.\n")
             else:
                 print("\nNothing to undo.\n")
