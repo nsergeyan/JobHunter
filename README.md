@@ -13,9 +13,9 @@ ranking model → a rigorous benchmark against two untrained baselines.
 
 ## TL;DR
 
-- **Real, self-collected data.** ~665 live postings scraped from 5 applicant-tracking
-  platforms (not a downloaded dataset), 610 of them hand-labeled `0/1/2` for personal fit
-  (302 no / 219 maybe / 89 yes).
+- **Real, self-collected data.** ~900 live postings scraped from 5 applicant-tracking
+  platforms (not a downloaded dataset), 684 of them hand-labeled `0/1/2` for personal fit
+  (330 no / 251 maybe / 103 yes).
 - **A real experiment, not a demo.** Does a model *trained* on those labels beat (a) an
   LLM asked to judge fit, and (b) ranking by embedding similarity? Measured with
   **precision@k on out-of-fold predictions**, all three on the same set.
@@ -25,15 +25,17 @@ ranking model → a rigorous benchmark against two untrained baselines.
   jumped from 0.60 to 0.80. Then I rebuilt the measurement, and **most of that result did not
   survive it**:
 
-  | 545 distinct jobs, 79 rated "yes" | ndcg@10, 95% interval |
+  | 611 distinct jobs, 90 rated "yes" | ndcg@10, 95% interval |
   |---|---|
-  | Logistic regression **+ description** | 0.77 [0.45-0.97] |
-  | Cosine similarity (untrained baseline) | 0.75 [0.46-0.94] |
-  | Logistic regression, hand-crafted only | 0.72 [0.39-0.96] |
-  | Logistic regression **+ semantic feature** | 0.72 [0.40-0.96] |
+  | Cosine similarity (untrained baseline) | 0.79 [0.55-0.96] |
+  | Logistic regression **+ description** | 0.76 [0.54-0.96] |
+  | Logistic regression, hand-crafted only | 0.75 [0.51-0.96] |
+  | Logistic regression **+ semantic feature** | 0.74 [0.50-0.95] |
+  | LLM-as-judge (untrained baseline) | 0.62 [0.36-0.86] |
 
   Nothing separates from anything else, and the ordering itself is unstable: changing 6.6% of
-  the labels flips "+ description beats hand-crafted" from 11% of resamples to 90%. See
+  the labels flipped "+ description beats hand-crafted" from 11% of resamples to 90%, and 74
+  labels after that it fell back to 40%. See
   [the instability finding](#the-finding-that-matters-none-of-this-is-stable), which is the
   real result here.
 - **The measurement was the real work.** Four defects, each of which had inflated or distorted
@@ -98,7 +100,7 @@ scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking
   (`gemini-then-ollama`) falls back to the local model per-posting on a Gemini error, so a
   rate limit doesn't stall the batch.
 - **Labeling.** A terminal CLI records a `0/1/2` fit rating (no/maybe/yes) against personal
-  preference. 610 of the 665 scraped postings labeled so far, and labeling is ongoing.
+  preference. 684 of the ~900 scraped postings labeled so far, and labeling is ongoing.
   Postings are offered **most-uncertain-first** (highest entropy over the predicted
   no/maybe/yes distribution), since attention is the scarce resource and a label on a posting
   the model already scores confidently teaches it little. That biases the labeled set toward
@@ -120,7 +122,7 @@ scrape (Java) → LLM extraction (Java) → manual labeling (Python) → ranking
 ## Methodology
 
 **Problem framing.** This is a small-sample, imbalanced, personalized *ranking* problem:
-610 labels over 545 distinct jobs once duplicates are collapsed, ~14% strong positives,
+684 labels over 652 distinct jobs once duplicates are collapsed, ~15% strong positives,
 and the goal is a ranked shortlist, not a binary classifier. That framing drives every choice below.
 
 **Target variable.** The `0/1/2` label is treated as an ordinal scale (no < maybe < yes)
@@ -168,7 +170,7 @@ feature vocabulary (skills, TF-IDF terms) is fit on that fold's training data on
 leaking test-set vocabulary into training.
 
 **Validation, take two: repeating the whole thing.** 5-fold rotation controls for *which rows
-land in which fold*, but not for *which shuffle produced the folds*. With 79 positives, one
+land in which fold*, but not for *which shuffle produced the folds*. With 90 positives, one
 shuffle is a lottery: moving a single posting changes p@5 by 0.20. So the entire
 cross-validation is now repeated under 5 different shuffles and reported as a mean ± std
 across them. Every headline number below is that mean. The single-shuffle figures this
@@ -230,7 +232,7 @@ has made. Precision@k remains the headline so earlier results stay comparable.
 
 ## Results
 
-All methods scored on the same **545 distinct jobs, 79 rated "yes"**, out-of-fold for the
+All methods scored on the same **611 distinct jobs, 90 rated "yes"**, out-of-fold for the
 trained model. Every number carries a 95% bootstrap interval over resampled postings, so the
 uncertainty means the same thing in every row.
 
@@ -244,15 +246,23 @@ job it has already trained on. See [Duplicates](#duplicates-and-what-they-cost).
 ### The honest headline
 
 **No method is separated from another at the 95% level.** Every interval overlaps every other.
-What the data does support is a consistent *direction*, and the strongest of those is that
-reading the job description helps.
+What the data supports is a direction on the two baseline questions, and they point opposite
+ways: the LLM judge is last on every metric at every cutoff, and the embedding baseline is not
+beaten by anything.
 
 | method | precision@10 | ndcg@10 |
 |---|---|---|
-| Logistic regression + description | **0.62** [0.30-0.90] | **0.77** [0.45-0.97] |
-| Cosine similarity (untrained) | 0.55 [0.20-0.90] | 0.75 [0.46-0.94] |
-| Logistic regression (hand-crafted) | 0.59 [0.20-0.90] | 0.72 [0.39-0.96] |
-| Logistic regression + semantic | 0.59 [0.30-0.90] | 0.72 [0.40-0.96] |
+| Cosine similarity (untrained) | **0.61** [0.30-0.90] | **0.79** [0.55-0.96] |
+| Logistic regression + description | 0.56 [0.20-0.90] | 0.76 [0.54-0.96] |
+| Logistic regression (hand-crafted) | 0.57 [0.20-0.90] | 0.75 [0.51-0.96] |
+| Logistic regression + semantic | 0.56 [0.20-0.90] | 0.74 [0.50-0.95] |
+| LLM-as-judge (untrained) | 0.40 [0.10-0.70] | 0.62 [0.36-0.86] |
+
+<sub>611 distinct jobs, 90 rated "yes", so the base rate is 14.7% and every method beats
+random by 3-4x. The LLM judge produced only **24 distinct scores across 611 postings** on its
+0-100 scale, so roughly 25 postings share each value and ties at the top are broken by row
+order rather than judgment. Its top-k is partly arbitrary as a result, which is worth knowing
+before reading its row as pure judgment quality.</sub>
 
 precision@5 is omitted deliberately: its interval spans essentially [0.00-1.00], because it is
 computed from five postings. Any ranking of methods by precision@5 at this scale is noise.
@@ -266,32 +276,39 @@ distribution of the difference.
 
 | comparison | ndcg@5 | ndcg@10 | ndcg@20 |
 |---|---|---|---|
-| + description **vs** hand-crafted | **90%** | **85%** | **78%** |
-| + description **vs** cosine similarity | 52% | 54% | 49% |
-| hand-crafted **vs** cosine similarity | 39% | 41% | 41% |
-| + semantic **vs** hand-crafted | 37% | 42% | **19%** |
+| + description **vs** LLM-as-judge | 75% | **83%** | **88%** |
+| + description **vs** hand-crafted | 40% | 56% | **85%** |
+| + semantic **vs** hand-crafted | 43% | 37% | 50% |
+| + description **vs** cosine similarity | 32% | 38% | 52% |
+| hand-crafted **vs** cosine similarity | 36% | 36% | 39% |
 
 <sub>Share of 2000 paired bootstrap resamples where the first method scored higher. 50% is a
 coin flip. None of these clears 95%, so all are directions rather than proofs.</sub>
 
-Read naively, that table says the description features are a clear win at 78-90%. **They are
-not, and the next section is the most important result in this project.**
+At 545 jobs the description row of this table read 90% / 85% / 78%, and the description
+features looked like a clear win. 66 distinct jobs later it reads 40% / 56% / 85%. **The next
+section is the most important result in this project.**
 
 ### The finding that matters: none of this is stable
 
-The table above was computed at 545 jobs. Re-running the identical code against the labeled set
-as it stood a few hours earlier, before 9 labels were corrected and 27 added, gives the opposite
-answer:
+The same comparison, run four times as the labeled set grew. The 545-job run is the one whose
+90% reading made the description features look settled. Re-running the identical code against
+the set as it stood a few hours before that, and again a week after, gives the opposite answer
+both times:
 
 | labeled set | "+ description beats hand-crafted", ndcg@5 |
 |---|---|
 | as of 12:22 (583 labels) | **11%** of resamples |
 | + 9 corrected labels | 34% |
 | + 27 newly labeled postings (610) | **90%** |
+| + 74 more labels (684, a week later) | **40%** |
 
 **36 label changes, 6.6% of the dataset, moved the conclusion from "clearly worse" to "clearly
-better".** A result that fragile is not a result. It is noise that happens to have a direction
-on the day you look.
+better". The next 74 labels moved it back.** A result that fragile is not a result. It is noise
+that happens to have a direction on the day you look. The semantic feature did the same thing
+from the other side: "actively hurts" at 19% of resamples on ndcg@20 became a 50% coin flip.
+The only direction that survived both label refreshes is the one nobody was hoping for, cosine
+similarity ahead of the hand-crafted model, at 36-41% in every cell of both runs.
 
 Two things follow, and both were invisible until this was checked:
 
@@ -308,7 +325,15 @@ guard against, appearing within hours of the sampler being switched on.
 
 The honest conclusion at this sample size: **the trained model, the embedding baseline and every
 feature variant are indistinguishable, and feature comparisons should not be run again until the
-random holdout is large enough to evaluate on.** It currently holds 126 labels with 14 positives.
+random holdout is large enough to evaluate on.** It holds 110 jobs with 12 positives in the
+modelling view (126 raw label rows, 14 of them positive).
+
+**And it is not growing.** Those numbers are unchanged across the last 74 labels, because the
+uncertainty sampler never offers holdout postings by design, so the default labeling queue
+cannot add to it. "Wait for the holdout" is therefore an unreachable condition as things stand:
+moving it needs deliberate `--order random` sessions, which trade the faster learning of active
+labeling for the ability to answer the comparison question at all. That trade is the real open
+decision here, not which feature set wins.
 
 ### Duplicates, and what they cost
 
@@ -380,19 +405,19 @@ another language while only catching those that *named* a requirement.
 
 ## Future work
 
-**More labeled data (top lever).** With 79 positives, precision@5 still carries a ±0.18
+**More labeled data (top lever).** With 90 positives, precision@5 still carries a ±0.18
 standard deviation, which is wide enough to swallow most feature experiments whole. Every open
 question below is really the same question: is the dataset big enough to answer it yet?
 Labeling is ongoing, now ordered by model uncertainty so each label buys more than it used to.
 
-**Refresh the LLM-as-judge arm.** The trained, semantic, description and cosine rows are all
-current at 574 labels. The LLM-judge row is not: it needs a judging pass over every posting,
-roughly one to three hours of local inference, and has not been re-run since 509 labels.
+**Grow the random holdout.** It has been frozen at 126 raw labels for 74 labels running,
+because the uncertainty sampler structurally cannot feed it. Until it moves, no feature
+comparison here can be settled, only re-rolled.
 
-**Settle the description-TF-IDF question.** Currently "promising, not proven": ahead of the
-hand-crafted model in 73-79% of paired resamples across all three NDCG cutoffs, which is a real
-direction but short of the 95% that would settle it. It flips to on-by-default the moment it
-clears that bar, and not before.
+**Settle the description-TF-IDF question.** Downgraded from "promising, not proven" to "no
+consistent direction": 40% of paired resamples at ndcg@5 and 85% at ndcg@20, having been 90%
+and 78% respectively one label refresh earlier. It flips to on-by-default if it clears 95% on
+the holdout, and not before.
 
 **Work out how much data would settle any of this.** Every open question above is really the
 same question, and a power analysis would turn "we need more labels" into a number: given the
@@ -422,7 +447,7 @@ so absence there is not evidence of closure and nothing is closed. Fixing that m
 those scrapers also return the unfiltered id set.
 
 **Market-analysis notebook** (skill demand, seniority mix across scraped companies) is on
-hold until more postings accumulate; ~665 isn't enough to say anything statistically
+hold until more postings accumulate; ~900 isn't enough to say anything statistically
 reliable about market-wide patterns. The `closed_at` timestamps now accumulating will make
 "how long does a posting stay open" answerable alongside it.
 
