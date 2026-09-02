@@ -13,6 +13,7 @@ A wide numeric scale gives it room to actually rank postings against each other.
 
 import json
 import os
+import time
 import urllib.request
 
 import numpy as np
@@ -72,9 +73,26 @@ def judge_vacancy(raw_text: str) -> int:
 
 
 def judge_all(df: pd.DataFrame) -> np.ndarray:
-    scores = np.zeros(len(df), dtype=int)
-    for i, raw_text in enumerate(df["raw_text"]):
-        scores[i] = judge_vacancy(raw_text or "")
-        print(f"  judged {i + 1}/{len(df)}", end="\r")
-    print()
+    total = len(df)
+    scores = np.zeros(total, dtype=int)
+    started = time.monotonic()
+
+    for i, row in enumerate(df.itertuples(index=False)):
+        call_started = time.monotonic()
+        scores[i] = judge_vacancy(row.raw_text or "")
+        call_seconds = time.monotonic() - call_started
+
+        # Average over calls so far, not the last one: Ollama's first call pays
+        # for loading the model into memory and would skew an ETA badly.
+        elapsed = time.monotonic() - started
+        eta_seconds = (elapsed / (i + 1)) * (total - i - 1)
+
+        title = f"{row.title} @ {row.company}"
+        print(
+            f"  [{i + 1:>3}/{total}] score {scores[i]:>3}  "
+            f"{call_seconds:>5.1f}s  eta {eta_seconds / 60:>4.1f}m  "
+            f"{title[:60]}"
+        )
+
+    print(f"  judged {total} postings in {(time.monotonic() - started) / 60:.1f}m")
     return scores
