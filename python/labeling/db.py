@@ -23,7 +23,12 @@ SELECT v.id, v.title, v.company, v.location, v.raw_text,
        e.salary_currency, e.salary_period, e.language_requirement, e.remote_policy
 FROM vacancies v
 JOIN vacancy_extractions e ON e.vacancy_id = v.id
+-- closed_at is set when a posting vanished from its board, so labeling it
+-- rates something nobody can apply to any more. Only Greenhouse, Ashby and
+-- Lever ever set it (see the timestamps note in CLAUDE.md), so this thins the
+-- queue rather than guaranteeing every dead posting is gone.
 WHERE v.id NOT IN (SELECT vacancy_id FROM labels)
+  AND v.closed_at IS NULL
 ORDER BY v.id
 """
 
