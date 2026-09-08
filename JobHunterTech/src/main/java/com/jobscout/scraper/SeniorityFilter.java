@@ -83,7 +83,19 @@ public final class SeniorityFilter {
 
     private static final int MAX_JUNIOR_YEARS = 2;
 
+    // Java's \s is ASCII only: space, tab, newline, form feed, carriage return. Job
+    // descriptions come from HTML and are full of non-breaking spaces, so a bar
+    // written "5\u00a0years" matched nothing at all -- two Workday postings in the
+    // database say exactly that and were accepted because of it. Fold the Unicode
+    // spaces onto a plain one before matching, rather than widening every pattern.
+    private static final Pattern UNICODE_SPACE = Pattern.compile(
+            "[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]");
+
     private SeniorityFilter() {
+    }
+
+    private static String normalizeSpaces(String text) {
+        return UNICODE_SPACE.matcher(text).replaceAll(" ");
     }
 
     /**
@@ -94,8 +106,9 @@ public final class SeniorityFilter {
         if (text == null || text.isBlank()) {
             return false;
         }
-        boolean senior = SENIOR_TITLE_PATTERN.matcher(text).find();
-        boolean juniorSignal = JUNIOR_INDICATOR_PATTERN.matcher(text).find();
+        String normalized = normalizeSpaces(text);
+        boolean senior = SENIOR_TITLE_PATTERN.matcher(normalized).find();
+        boolean juniorSignal = JUNIOR_INDICATOR_PATTERN.matcher(normalized).find();
         return senior && !juniorSignal;
     }
 
@@ -112,17 +125,21 @@ public final class SeniorityFilter {
      * so dual-track postings survive.
      */
     public static boolean requiresTooMuchExperience(String text) {
-        if (text == null || text.isBlank() || JUNIOR_INDICATOR_PATTERN.matcher(text).find()) {
+        if (text == null || text.isBlank()) {
             return false;
         }
-        Matcher matcher = YEARS_EXPERIENCE_PATTERN.matcher(text);
+        String normalized = normalizeSpaces(text);
+        if (JUNIOR_INDICATOR_PATTERN.matcher(normalized).find()) {
+            return false;
+        }
+        Matcher matcher = YEARS_EXPERIENCE_PATTERN.matcher(normalized);
         while (matcher.find()) {
             if (Integer.parseInt(matcher.group(1)) > MAX_JUNIOR_YEARS) {
                 return true;
             }
         }
 
-        Matcher wordMatcher = YEARS_EXPERIENCE_WORD_PATTERN.matcher(text);
+        Matcher wordMatcher = YEARS_EXPERIENCE_WORD_PATTERN.matcher(normalized);
         while (wordMatcher.find()) {
             int years = NUMBER_WORDS.get(wordMatcher.group(1).toLowerCase(Locale.ROOT));
             if (years > MAX_JUNIOR_YEARS) {
@@ -130,7 +147,7 @@ public final class SeniorityFilter {
             }
         }
 
-        return LEADS_OTHERS_PATTERN.matcher(text).find()
-                || SENIORITY_PROSE_PATTERN.matcher(text).find();
+        return LEADS_OTHERS_PATTERN.matcher(normalized).find()
+                || SENIORITY_PROSE_PATTERN.matcher(normalized).find();
     }
 }

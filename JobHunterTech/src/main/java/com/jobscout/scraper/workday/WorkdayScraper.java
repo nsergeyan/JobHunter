@@ -125,12 +125,27 @@ public class WorkdayScraper extends BaseScraper {
         return parse(fetcher.get(detailUrl), detailUrl);
     }
 
+    /**
+     * The description as everything downstream sees it: entity-decoded plain text.
+     *
+     * The seniority filter and the stored raw_text both read this, so the two can
+     * never diverge again. They did: the filter used to read the raw markup, where
+     * Workday escapes "+" as the HTML entity &#43;. "3&#43; years" gives
+     * YEARS_EXPERIENCE_PATTERN nothing to match -- its optional \+ cannot consume
+     * "&", so the match dies right after the digit -- while the decoded text written
+     * to the database said "3+ years" all along. 15 postings were accepted that way
+     * in the ten days after the filter was rewritten on 2026-08-28.
+     */
+    private static String descriptionText(JsonNode detail) {
+        return JobPostingHtml.htmlToText(detail.path("jobPostingInfo").path("jobDescription").asText(""));
+    }
+
     public VacancyRecord toVacancy(WorkdayCompany company, JobListing listing, JsonNode detail) {
         JsonNode info = detail.path("jobPostingInfo");
         String title = info.path("title").asText(listing.title());
         String url = info.path("externalUrl").asText(detailUrl(company, listing));
         String location = info.path("location").asText(null);
-        String rawText = JobPostingHtml.htmlToText(info.path("jobDescription").asText(""));
+        String rawText = descriptionText(detail);
         // Some tenants (e.g. Capital One) return hiringOrganization.name as an empty
         // string rather than omitting it -- .asText(fallback) only substitutes the
         // fallback for a MISSING field, not a present-but-blank one, so check blankness
@@ -197,7 +212,7 @@ public class WorkdayScraper extends BaseScraper {
                         continue;
                     }
 
-                    String description = detail.path("jobPostingInfo").path("jobDescription").asText("");
+                    String description = descriptionText(detail);
 
                     if (SeniorityFilter.requiresTooMuchExperience(description)) {
                         System.out.println("Skipping " + company.company() + " \"" + listing.title()

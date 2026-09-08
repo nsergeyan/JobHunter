@@ -22,9 +22,14 @@ package com.jobscout.scraper;
  *
  * History:
  *   1 -- initial version, covering the filters as they stood in August 2026.
+ *   2 -- 2026-09-07. Two fixes, both of which only tighten the seniority check.
+ *        WorkdayScraper stopped filtering on raw markup (Workday writes "+" as
+ *        &#43;, which hid every "N+ years" bar from the filter), and SeniorityFilter
+ *        now folds non-breaking spaces before matching. Bumped so postings judged
+ *        under the older, blinder check get one fresh evaluation.
  */
 public final class FilterVersion {
-    public static final int CURRENT = 1;
+    public static final int CURRENT = 2;
 
     private FilterVersion() {
     }

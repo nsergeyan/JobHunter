@@ -97,6 +97,23 @@ class WorkdayScraperTest {
             }
             """;
 
+    // Real-world case: Workday escapes "+" as the HTML entity &#43;, so the years
+    // bar is invisible in the raw markup and plain as day once the markup is turned
+    // into text. Matches the actual Autodesk "Software Engineer, Education" posting
+    // that was accepted on 2026-08-28.
+    private static final String ENTITY_ENCODED_EXPERIENCE_DETAIL_JSON = """
+            {
+              "jobPostingInfo": {
+                "title": "Software Engineer, Education",
+                "jobDescription": "<li><p>3&#43; years of professional software engineering experience</p></li>",
+                "location": "Birmingham, United Kingdom",
+                "country": {"descriptor": "United Kingdom"},
+                "externalUrl": "https://testco.wd1.myworkdayjobs.com/testco/job/A/Software-Engineer-Education_R1"
+              },
+              "hiringOrganization": {"name": "TestCo"}
+            }
+            """;
+
     private static FakeHttpFetcher fetcherFor(java.util.function.BiFunction<String, String, String> handler) {
         return new FakeHttpFetcher(handler::apply);
     }
@@ -270,6 +287,35 @@ class WorkdayScraperTest {
             }
             if (url.equals(detailUrl)) {
                 return TOO_MUCH_EXPERIENCE_DETAIL_JSON;
+            }
+            throw new AssertionError("Unexpected request: " + url);
+        }), List.of(TEST_CO), 20);
+
+        try (Connection conn = freshDb(tmpDir)) {
+            int count = scraper.run(conn);
+            assertEquals(0, count);
+
+            try (ResultSet rs = conn.createStatement().executeQuery("SELECT COUNT(*) AS c FROM vacancies")) {
+                assertTrue(rs.next());
+                assertEquals(0, rs.getInt("c"));
+            }
+        }
+    }
+
+    @Test
+    void runSkipsPostingsWhoseExperienceBarIsHtmlEncoded(@TempDir Path tmpDir) throws SQLException {
+        String detailUrl = "https://testco.wd1.myworkdayjobs.com/wday/cxs/testco/testco/job/A/Software-Engineer-Education_R1";
+        String listPage = """
+                {"total":1,"jobPostings":[
+                  {"title":"Software Engineer, Education","externalPath":"/job/A/Software-Engineer-Education_R1"}
+                ]}
+                """;
+        WorkdayScraper scraper = new WorkdayScraper(fetcherFor((url, body) -> {
+            if (url.equals(LIST_URL)) {
+                return listPage;
+            }
+            if (url.equals(detailUrl)) {
+                return ENTITY_ENCODED_EXPERIENCE_DETAIL_JSON;
             }
             throw new AssertionError("Unexpected request: " + url);
         }), List.of(TEST_CO), 20);

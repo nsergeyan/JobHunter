@@ -100,6 +100,14 @@ class SeniorityFilterTest {
     }
 
     @Test
+    void aNonBreakingSpaceDoesNotHideTheYearsBar() {
+        // Java's \s is ASCII only, so these used to match nothing at all. Both
+        // strings are taken from postings sitting in the database.
+        assertTrue(SeniorityFilter.requiresTooMuchExperience("Experience: more than 5\u00a0years"));
+        assertTrue(SeniorityFilter.requiresTooMuchExperience("Built\u00a0on\u00a0more\u00a0than\u00a010\u00a0years"));
+    }
+
+    @Test
     void isSeniorRoleIsStillCorrectOnTitles() {
         // Unchanged, and still the right tool for the job it was left doing.
         assertTrue(SeniorityFilter.isSeniorRole("Staff Software Engineer"));

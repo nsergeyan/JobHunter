@@ -77,13 +77,24 @@ public class GreenhouseScraper extends BaseScraper {
         String externalId = externalIdOf(job);
         String location = job.path("location").path("name").asText(null);
         String companyName = job.path("company_name").asText(company.company());
-        String rawText = JobPostingHtml.htmlToText(descriptionHtml(job));
+        String rawText = descriptionText(job);
 
         return new VacancyRecord(sourceName(), externalId, url, title, companyName, location, rawText);
     }
 
     private static String descriptionHtml(JsonNode job) {
         return Parser.unescapeEntities(job.path("content").asText(""), false);
+    }
+
+    /**
+     * As WorkdayScraper.descriptionText: one string for both the filter and the
+     * stored raw_text. Greenhouse already decodes entities above, so unlike Workday
+     * this changes no verdict that could be measured (334 Cloudflare postings, zero
+     * disagreements). It is here so that filtering markup while storing text stops
+     * being a shape a scraper can have.
+     */
+    private static String descriptionText(JsonNode job) {
+        return JobPostingHtml.htmlToText(descriptionHtml(job));
     }
 
     public int run(Connection conn) {
@@ -120,7 +131,7 @@ public class GreenhouseScraper extends BaseScraper {
                         continue;
                     }
 
-                    String description = descriptionHtml(job);
+                    String description = descriptionText(job);
 
                     if (SeniorityFilter.requiresTooMuchExperience(description)) {
                         System.out.println("Skipping " + company.company() + " \"" + title
