@@ -264,10 +264,6 @@
       "boardToken": "togetherai"
     },
     {
-      "company": "Postman",
-      "boardToken": "postman"
-    },
-    {
       "company": "Imbue",
       "boardToken": "imbue"
     },
@@ -313,6 +309,12 @@
     }
   ],
   "workday": [
+    {
+      "company": "Postman",
+      "host": "postman.wd108.myworkdayjobs.com",
+      "tenant": "postman",
+      "site": "careers"
+    },
     {
       "company": "Zendesk",
       "host": "zendesk.wd1.myworkdayjobs.com",
