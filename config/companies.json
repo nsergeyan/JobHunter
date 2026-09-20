@@ -298,6 +298,18 @@
     {
       "company": "Stability AI",
       "boardToken": "stabilityai"
+    },
+    {
+      "company": "Catawiki",
+      "boardToken": "catawiki"
+    },
+    {
+      "company": "Fourthline",
+      "boardToken": "fourthline"
+    },
+    {
+      "company": "Guerrilla Games",
+      "boardToken": "guerrilla-games"
     }
   ],
   "workday": [
@@ -456,6 +468,102 @@
       "host": "broadcom.wd1.myworkdayjobs.com",
       "tenant": "broadcom",
       "site": "External_Career"
+    },
+    {
+      "company": "Rabobank",
+      "host": "rabobank.wd3.myworkdayjobs.com",
+      "tenant": "rabobank",
+      "site": "jobs"
+    },
+    {
+      "company": "NatWest",
+      "host": "rbs.wd3.myworkdayjobs.com",
+      "tenant": "rbs",
+      "site": "RBS"
+    },
+    {
+      "company": "Airbus",
+      "host": "ag.wd3.myworkdayjobs.com",
+      "tenant": "ag",
+      "site": "Airbus"
+    },
+    {
+      "company": "Novartis",
+      "host": "novartis.wd3.myworkdayjobs.com",
+      "tenant": "novartis",
+      "site": "Novartis_Careers"
+    },
+    {
+      "company": "Roche",
+      "host": "roche.wd3.myworkdayjobs.com",
+      "tenant": "roche",
+      "site": "roche-ext"
+    },
+    {
+      "company": "Maersk",
+      "host": "maersk.wd3.myworkdayjobs.com",
+      "tenant": "maersk",
+      "site": "Maersk_Careers"
+    },
+    {
+      "company": "Lloyds",
+      "host": "lbg.wd3.myworkdayjobs.com",
+      "tenant": "lbg",
+      "site": "LBG_Careers"
+    },
+    {
+      "company": "HP",
+      "host": "hp.wd5.myworkdayjobs.com",
+      "tenant": "hp",
+      "site": "ExternalCareerSite"
+    },
+    {
+      "company": "Salesforce",
+      "host": "salesforce.wd12.myworkdayjobs.com",
+      "tenant": "salesforce",
+      "site": "External_Career_Site"
+    },
+    {
+      "company": "Micron",
+      "host": "micron.wd1.myworkdayjobs.com",
+      "tenant": "micron",
+      "site": "External"
+    },
+    {
+      "company": "Sanofi",
+      "host": "sanofi.wd3.myworkdayjobs.com",
+      "tenant": "sanofi",
+      "site": "SanofiCareers"
+    },
+    {
+      "company": "Wolters Kluwer",
+      "host": "wk.wd3.myworkdayjobs.com",
+      "tenant": "wk",
+      "site": "External"
+    },
+    {
+      "company": "RELX",
+      "host": "relx.wd3.myworkdayjobs.com",
+      "tenant": "relx",
+      "site": "RELX"
+    },
+    {
+      "company": "Sartorius",
+      "host": "sartorius.wd3.myworkdayjobs.com",
+      "tenant": "sartorius",
+      "site": "sartoriuscareers"
+    },
+    {
+      "company": "Essity",
+      "host": "essity.wd3.myworkdayjobs.com",
+      "tenant": "essity",
+      "site": "Job_opportunities"
+    },
+    {
+      "company": "Johnson Matthey",
+      "host": "matthey.wd3.myworkdayjobs.com",
+      "tenant": "matthey",
+      "site": "Ext_Career_Site"
     }
   ],
   "ashby": [
@@ -646,6 +754,22 @@
     {
       "company": "Confluent",
       "boardName": "confluent"
+    },
+    {
+      "company": "Bynder",
+      "boardName": "bynder"
+    },
+    {
+      "company": "DataSnipper",
+      "boardName": "datasnipper"
+    },
+    {
+      "company": "Bitvavo",
+      "boardName": "bitvavo"
+    },
+    {
+      "company": "Deeploy",
+      "boardName": "deeploy"
     }
   ],
   "lever": [
@@ -738,6 +862,18 @@
     {
       "company": "Thales",
       "companyIdentifier": "Thales"
+    },
+    {
+      "company": "KPN",
+      "companyIdentifier": "kpn"
+    },
+    {
+      "company": "Coolblue",
+      "companyIdentifier": "coolblue"
+    },
+    {
+      "company": "Picnic",
+      "companyIdentifier": "picnic"
     }
   ]
 }
