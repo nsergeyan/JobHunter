@@ -199,9 +199,11 @@ def main() -> int:
 
     started = time.monotonic()
     hide_non_english = HIDE_NON_ENGLISH_POSTINGS and not args.all_languages
+    # with_new_arrivals: a pipeline run should always be able to answer "did
+    # anything new turn up", which the view filters can otherwise hide entirely.
     markdown, ranked = build_digest(
         args.top_k, since_days, seniority_include, location_include, args.new_only,
-        hide_non_english=hide_non_english,
+        hide_non_english=hide_non_english, with_new_arrivals=True,
     )
     results.append(StageResult("rank", True, f"{len(ranked)} postings ranked", time.monotonic() - started))
 

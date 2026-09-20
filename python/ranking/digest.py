@@ -174,6 +174,32 @@ def _describe_scope(
     return f"unlabeled, {window}, seniority: {seniority}, location: {location}, {language}"
 
 
+def _format_rows(ranked: pd.DataFrame, top_k: int, hide_non_english: bool) -> list[str]:
+    """Render the ranked postings themselves, shared by the main digest and the
+    new-arrivals section so the two can never format a posting differently."""
+    lines: list[str] = []
+    for rank, (_, row) in enumerate(ranked.head(top_k).iterrows(), start=1):
+        location = row.get("location") or "?"
+        seniority = row.get("seniority") or "unknown"
+        marker = " **NEW**" if row.get("is_new", False) else ""
+        # Only ever non-empty when the language view is off, so it labels exactly
+        # the postings you opted in to seeing.
+        language, _ = detect_written_language(row.get("raw_text"))
+        language_tag = (
+            f" `{LANGUAGE_CODES.get(language, language)}`"
+            if language and not hide_non_english
+            else ""
+        )
+        lines.append(
+            f"{rank}. **{row['score']:.2f}**{marker}  "
+            f"{row['title']} - {row['company']} ({location}) `{seniority}`{language_tag}"
+        )
+        url = row.get("url")
+        if isinstance(url, str) and url:
+            lines.append(f"   {url}")
+    return lines
+
+
 def format_digest(
     ranked: pd.DataFrame,
     top_k: int,
@@ -220,25 +246,7 @@ def format_digest(
         "",
     ]
 
-    for rank, (_, row) in enumerate(ranked.head(top_k).iterrows(), start=1):
-        location = row.get("location") or "?"
-        seniority = row.get("seniority") or "unknown"
-        marker = " **NEW**" if row.get("is_new", False) else ""
-        # Only ever non-empty when the language view is off, so it labels exactly
-        # the postings you opted in to seeing.
-        language, _ = detect_written_language(row.get("raw_text"))
-        language_tag = (
-            f" `{LANGUAGE_CODES.get(language, language)}`"
-            if language and not hide_non_english
-            else ""
-        )
-        lines.append(
-            f"{rank}. **{row['score']:.2f}**{marker}  "
-            f"{row['title']} - {row['company']} ({location}) `{seniority}`{language_tag}"
-        )
-        url = row.get("url")
-        if isinstance(url, str) and url:
-            lines.append(f"   {url}")
+    lines += _format_rows(ranked, top_k, hide_non_english)
 
     lines += ["", "---", "", "Rate these with `python -m labeling.cli` to drop them from the next digest."]
     return "\n".join(lines) + "\n"
@@ -283,6 +291,40 @@ def format_health(failures: pd.DataFrame, companies_scraped: int) -> list[str]:
     return lines
 
 
+def format_new_arrivals(top_k: int, since_days: int | None, hide_non_english: bool) -> str:
+    """A second section listing everything that arrived since the last digest,
+    with the VIEW filters switched off.
+
+    The point is that a view filter must never be able to hide the fact that a
+    posting exists. SENIORITY_INCLUDE and LOCATION_INCLUDE are deliberately
+    narrow (internship, Netherlands), so a board can deliver a hundred fresh
+    postings and the main list still shows nothing, which reads as "the scrape
+    did nothing" when it did. This answers "what arrived" while the list above
+    answers "what should I apply to".
+
+    Newness is first_seen, never scraped_at or last_seen: it is written once and
+    never refreshed, so it is the only column that means "new to me".
+    """
+    boundary = new_since_boundary()
+    ranked, _ = score_unlabeled(since_days, None, None, hide_non_english)
+    ranked = mark_new(ranked, boundary)
+    ranked = ranked[ranked["is_new"]].reset_index(drop=True)
+
+    lines = ["", "---", "", f"## New arrivals since {boundary.isoformat()}", ""]
+    if ranked.empty:
+        lines += ["Nothing new, at any seniority or location.", ""]
+        return "\n".join(lines)
+
+    shown = min(top_k, len(ranked))
+    lines += [
+        f"_All seniorities and locations, {len(ranked)} new, showing {shown}._",
+        "",
+    ]
+    lines += _format_rows(ranked, top_k, hide_non_english)
+    lines.append("")
+    return "\n".join(lines)
+
+
 def build_digest(
     top_k: int,
     since_days: int | None,
@@ -290,11 +332,17 @@ def build_digest(
     location_include: set[str] | None,
     new_only: bool = False,
     hide_non_english: bool = HIDE_NON_ENGLISH_POSTINGS,
+    with_new_arrivals: bool = False,
 ) -> tuple[str, pd.DataFrame]:
     """Score, mark newness, optionally narrow to new arrivals, and render.
 
     Shared by the CLI below and by orchestrator.py, so the two entry points can
     never drift apart on what a digest contains.
+
+    with_new_arrivals appends an unfiltered "what arrived" section, so a narrow
+    view filter cannot leave you thinking a scrape found nothing. Skipped when no
+    view filter is active, since the main list already shows everything, and when
+    new_only is set, since that list is already exactly the new arrivals.
     """
     boundary = new_since_boundary()
     ranked, pool_size = score_unlabeled(since_days, seniority_include, location_include, hide_non_english)
@@ -305,6 +353,11 @@ def build_digest(
         ranked, top_k, pool_size, since_days, seniority_include, location_include, boundary,
         hide_non_english,
     )
+    narrowed = seniority_include is not None or location_include is not None
+    if with_new_arrivals and narrowed and not new_only:
+        markdown = markdown.rstrip("\n") + "\n" + format_new_arrivals(
+            top_k, since_days, hide_non_english
+        )
     failures, companies_scraped = load_scrape_health()
     health = format_health(failures, companies_scraped)
     if health:
@@ -347,7 +400,7 @@ def main() -> None:
 
     markdown, _ = build_digest(
         args.top_k, since_days, seniority_include, location_include, args.new_only,
-        hide_non_english=not args.all_languages,
+        hide_non_english=not args.all_languages, with_new_arrivals=True,
     )
     print(markdown)
 

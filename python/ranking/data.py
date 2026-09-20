@@ -28,7 +28,7 @@ ORDER BY v.id
 # digest, so the act of dismissing a posting also grows the training set.
 LOAD_UNLABELED_SQL = """
 SELECT v.id AS vacancy_id, v.title, v.company, v.location, v.url,
-       v.scraped_at, v.first_seen, v.raw_text,
+       v.scraped_at, v.first_seen, v.last_seen, v.raw_text,
        e.skills, e.seniority, e.remote_policy, e.language_requirement
 FROM vacancies v
 JOIN vacancy_extractions e ON e.vacancy_id = v.id
@@ -43,12 +43,19 @@ WHERE l.label IS NULL
 # produced different precision@k, which makes any A/B comparison meaningless.
 ORDER_BY_ID_SQL = " ORDER BY v.id"
 
-# Optional LIVENESS window, and the distinction matters. The scraper refreshes
-# scraped_at on every run for any posting still on its board (VacancyRepository's
-# ON CONFLICT ... SET scraped_at = excluded.scraped_at), so this asks "was this
+# Optional LIVENESS window, and the distinction matters. This asks "was this
 # still listed in a scrape within the last N days" -- NOT "was it posted
-# recently". A posting first seen in July that is still open gets today's
-# scraped_at and passes this filter, which is correct: it is still applicable.
+# recently". A posting first seen in July that is still open is still
+# applicable, so it should pass.
+#
+# That question is answered by last_seen, NOT scraped_at, and the two diverge.
+# CompanyScrape.listed calls VacancyRepository.touchLastSeen for every posting
+# seen on a board, before any filtering, so last_seen tracks the board. But
+# scraped_at only moves inside upsertVacancy, and the scrapers skip that call
+# for postings they already evaluated on an earlier run (see
+# WorkdayScraper.alreadyEvaluated) rather than re-fetching the detail page. So a
+# still-open posting keeps a frozen scraped_at and used to fall out of this
+# window after N days while the board still listed it.
 #
 # first_seen is the column that answers "is this new", and it is never touched
 # on conflict. It rides along in the SELECT so the digest can mark new postings.
@@ -60,7 +67,7 @@ ORDER_BY_ID_SQL = " ORDER BY v.id"
 # ISO 8601 strings sort lexicographically in the same order they sort
 # chronologically, so a plain string comparison against an ISO cutoff is correct
 # here without any date parsing.
-STILL_LISTED_SQL = " AND v.scraped_at >= :cutoff"
+STILL_LISTED_SQL = " AND v.last_seen >= :cutoff"
 
 
 def collapse_exact_duplicates(df: pd.DataFrame) -> pd.DataFrame:
