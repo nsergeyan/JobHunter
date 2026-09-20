@@ -26,6 +26,23 @@ Company name is deliberately excluded as a feature: a third of the labeled set
 is a single company (Bosch), so the model would partly learn "Bosch -> no"
 instead of transferable skill/role signal, which would not generalize to unseen
 companies. Salary is excluded too since it is missing on ~95% of rows.
+
+Seniority stays IN, and dropping it was tried and reverted on 2026-09-20. The
+argument for dropping it was reasonable: the 0/1/2 labels are given on skills,
+title and description, not on the seniority tag, so the fitted weight
+(internship +0.89, mid -0.57) reads as a correlation in this sample rather than
+a stated preference, and it applied a flat penalty to everything the extractor
+called "mid" off a phrase like "2+ years". Measured at n=681 on identical rows,
+folds and seeds, removing it cost precision@5 0.76 -> 0.56 and ndcg@5
+0.81 -> 0.75, with k=20 unchanged. The damage is all at the top of the list,
+which is the part the digest shows. One dense column firing on 185 postings
+beats what replaced it: the title n-grams carry seniority only in fragments
+("internship" +0.69 while "intern" is -0.26), too sparse to make the model
+confident. Note what this does and does not show. It shows the feature is
+PREDICTIVE, not that it matches how the user actually judges a role, and the
+evaluation set is partly uncertainty-sampled, so it is not the clean holdout
+test. Which seniorities to SEE remains a digest view filter
+(ranking/preferences.py), which is a separate question from this one.
 """
 
 import argparse
