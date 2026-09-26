@@ -9,6 +9,9 @@ ranking model → a rigorous benchmark against two untrained baselines.
 **Stack:** Java 21 / Gradle (scraping, extraction, database) · Python / scikit-learn
 (modeling & evaluation) · SQLite · Ollama + Gemini (LLM extraction)
 
+<img width="1370" height="654" alt="Screenshot 2026-09-26 at 12 55 07" src="https://github.com/user-attachments/assets/274ab886-d97b-4edd-b390-f4b960105ed6" />
+
+
 ---
 
 ## TL;DR
