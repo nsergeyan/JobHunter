@@ -558,4 +558,8 @@ The benchmark's LLM-judge and cosine steps also need a local embedding model:
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+Licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). It is free
+to use for any noncommercial purpose. Commercial use requires permission: for
+commercial licensing, contact sergeyan.narek@gmail.com.
+
+Versions released before this change remain under the MIT License.
